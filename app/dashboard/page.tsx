@@ -18,20 +18,12 @@ import {
   Clock,
   Star,
   Loader,
+  LogOut,
+  Settings,
 } from "lucide-react";
+import LeftSidebar from "@/app/components/Sidebar";
 
-type GoogleBooksVolume = {
-  volumeInfo: {
-    title?: string;
-    authors?: string[];
-    categories?: string[];
-  };
-};
-
-type GoogleBooksResponse = {
-  items?: GoogleBooksVolume[];
-};
-
+// ==================== TYPES ====================
 interface TrendingBook {
   title: string;
   author: string;
@@ -65,10 +57,157 @@ interface SuggestedWriter {
   bio: string;
 }
 
+interface UserProfile {
+  name: string;
+  username: string;
+  avatar: string;
+  email: string;
+}
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number;
+}
+
+// ==================== RIGHT SIDEBAR COMPONENT ====================
+interface RightSidebarProps {
+  trendingBooks: TrendingBook[];
+  loadingTrending: boolean;
+  internalTrending: TrendingTopic[];
+  suggestedWriters: SuggestedWriter[];
+}
+
+function RightSidebar({
+  trendingBooks,
+  loadingTrending,
+  internalTrending,
+  suggestedWriters,
+}: RightSidebarProps) {
+  return (
+    <aside className="fixed right-0 top-0 h-screen w-96 bg-neutral-900 border-l border-neutral-800 p-6 overflow-y-auto">
+      {/* Notifications */}
+      <div className="flex items-center justify-end space-x-3 mb-8">
+        <button className="relative p-2 text-neutral-400 hover:bg-neutral-800 rounded-lg transition">
+          <Bell size={20} strokeWidth={1.5} />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-neutral-600 rounded-full"></span>
+        </button>
+      </div>
+
+      {/* Trending Books from Google Books API */}
+      <div className="mb-8">
+        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
+          <BookOpen
+            className="mr-2 text-neutral-500"
+            size={16}
+            strokeWidth={1.5}
+          />
+          Trending Books
+        </h3>
+        {loadingTrending ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader className="animate-spin text-neutral-600" size={24} />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {trendingBooks.map((book, idx) => (
+              <div
+                key={idx}
+                className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
+              >
+                <p className="font-medium text-neutral-300 text-sm truncate">
+                  {book.title}
+                </p>
+                <p className="text-xs text-neutral-500 mt-1">
+                  by {book.author}
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-xs text-neutral-600">
+                    {book.category}
+                  </span>
+                  <span className="text-xs text-neutral-600">
+                    {book.discussions} discussions
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Internal Trending Topics */}
+      <div className="mb-8">
+        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
+          <Hash className="mr-2 text-neutral-500" size={16} strokeWidth={1.5} />
+          Trending in SML
+        </h3>
+        <div className="space-y-2">
+          {internalTrending.map((topic, idx) => (
+            <div
+              key={idx}
+              className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <p className="font-medium text-neutral-300 text-sm">
+                  #{topic.tag}
+                </p>
+                <span className="text-xs text-neutral-500">{topic.growth}</span>
+              </div>
+              <p className="text-xs text-neutral-600 mt-1">
+                {topic.posts} posts
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Suggested Writers */}
+      <div>
+        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
+          <Users
+            className="mr-2 text-neutral-500"
+            size={16}
+            strokeWidth={1.5}
+          />
+          Suggested Writers
+        </h3>
+        <div className="space-y-3">
+          {suggestedWriters.map((writer, idx) => (
+            <div
+              key={idx}
+              className="p-4 bg-neutral-800/50 border border-neutral-800 rounded-lg"
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <p className="font-medium text-neutral-300 text-sm">
+                    {writer.name}
+                  </p>
+                  <p className="text-xs text-neutral-600">{writer.handle}</p>
+                </div>
+                <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded text-xs font-medium transition">
+                  Follow
+                </button>
+              </div>
+              <p className="text-xs text-neutral-500">{writer.bio}</p>
+              <p className="text-xs text-neutral-600 mt-2">
+                {writer.followers} followers
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+// ==================== MAIN DASHBOARD COMPONENT ====================
 export default function SMLDashboard() {
   const [activeTab, setActiveTab] = useState<string>("feed");
   const [trendingBooks, setTrendingBooks] = useState<TrendingBook[]>([]);
   const [loadingTrending, setLoadingTrending] = useState<boolean>(true);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loadingUser, setLoadingUser] = useState<boolean>(true);
 
   const feedPosts: FeedPost[] = [
     {
@@ -297,12 +436,39 @@ export default function SMLDashboard() {
     },
   ];
 
+  // Fetch user profile (simulated API call)
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      setLoadingUser(true);
+      try {
+        // Simulate API call with delay
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Simulated user data - replace with actual API call
+        const userData: UserProfile = {
+          name: "John Doe",
+          username: "johndoe",
+          avatar: "JD",
+          email: "john.doe@example.com",
+        };
+
+        setUser(userData);
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        setUser(null);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
   // Fetch trending books from Google Books API
   useEffect(() => {
     const fetchTrendingBooks = async () => {
       setLoadingTrending(true);
       try {
-        // Fetch from multiple categories to get diverse trending books
         const categories = [
           "fiction",
           "mystery",
@@ -317,21 +483,28 @@ export default function SMLDashboard() {
           `https://www.googleapis.com/books/v1/volumes?q=subject:${randomCategory}&orderBy=newest&maxResults=6&langRestrict=en`
         );
 
-        const data: GoogleBooksResponse = await response.json();
+        const data = await response.json();
 
-        if (data.items?.length) {
+        if (data.items) {
           const books: TrendingBook[] = data.items.map(
-            (item: GoogleBooksVolume) => ({
-              title: item.volumeInfo.title ?? "Untitled",
-              author: item.volumeInfo.authors?.[0] ?? "Unknown Author",
-              category: item.volumeInfo.categories?.[0] ?? randomCategory,
+            (item: {
+              volumeInfo: {
+                title: string;
+                authors?: string[];
+                categories?: string[];
+              };
+            }) => ({
+              title: item.volumeInfo.title,
+              author: item.volumeInfo.authors
+                ? item.volumeInfo.authors[0]
+                : "Unknown Author",
+              category: item.volumeInfo.categories
+                ? item.volumeInfo.categories[0]
+                : randomCategory,
               discussions: Math.floor(Math.random() * 500) + 50,
             })
           );
-
           setTrendingBooks(books);
-        } else {
-          setTrendingBooks([]);
         }
       } catch (error) {
         console.error("Error fetching trending books:", error);
@@ -364,111 +537,23 @@ export default function SMLDashboard() {
     fetchTrendingBooks();
   }, []);
 
+  const handleSignOut = () => {
+    console.log("User signed out");
+    setUser(null);
+  };
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    console.log("Active tab:", tab);
+  };
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
-      {/* Left Sidebar */}
-      <aside className="fixed left-0 top-0 h-screen w-72 bg-neutral-900 border-r border-neutral-800 p-6 overflow-y-auto">
-        <div className="mb-8">
-          <div className="flex items-center space-x-3 mb-8">
-            <BookOpen
-              className="text-neutral-400"
-              size={36}
-              strokeWidth={1.5}
-            />
-            <h1 className="text-3xl font-serif text-neutral-300">SML</h1>
-          </div>
-
-          <nav className="space-y-2">
-            <button
-              onClick={() => setActiveTab("feed")}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                activeTab === "feed"
-                  ? "bg-neutral-800 text-neutral-100"
-                  : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-300"
-              }`}
-            >
-              <Home size={20} strokeWidth={1.5} />
-              <span className="font-medium">Home</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("discover")}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                activeTab === "discover"
-                  ? "bg-neutral-800 text-neutral-100"
-                  : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-300"
-              }`}
-            >
-              <Compass size={20} strokeWidth={1.5} />
-              <span className="font-medium">Discover</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("trending")}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                activeTab === "trending"
-                  ? "bg-neutral-800 text-neutral-100"
-                  : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-300"
-              }`}
-            >
-              <TrendingUp size={20} strokeWidth={1.5} />
-              <span className="font-medium">Trending</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("lists")}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                activeTab === "lists"
-                  ? "bg-neutral-800 text-neutral-100"
-                  : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-300"
-              }`}
-            >
-              <Bookmark size={20} strokeWidth={1.5} />
-              <span className="font-medium">Reading Lists</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("messages")}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                activeTab === "messages"
-                  ? "bg-neutral-800 text-neutral-100"
-                  : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-300"
-              }`}
-            >
-              <MessageCircle size={20} strokeWidth={1.5} />
-              <span className="font-medium">Messages</span>
-              <span className="ml-auto bg-neutral-700 text-neutral-300 text-xs rounded-full w-6 h-6 flex items-center justify-center font-medium">
-                2
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab("profile")}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                activeTab === "profile"
-                  ? "bg-neutral-800 text-neutral-100"
-                  : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-300"
-              }`}
-            >
-              <User size={20} strokeWidth={1.5} />
-              <span className="font-medium">Profile</span>
-            </button>
-          </nav>
-        </div>
-
-        <button className="w-full bg-neutral-800 hover:bg-neutral-700 text-neutral-100 px-6 py-3 rounded-lg font-medium transition flex items-center justify-center space-x-2 border border-neutral-700">
-          <PenTool size={18} strokeWidth={1.5} />
-          <span>Write Review</span>
-        </button>
-
-        <div className="mt-8 pt-8 border-t border-neutral-800">
-          <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-800/50 transition cursor-pointer">
-            <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 font-medium text-sm">
-              JD
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-neutral-300">John Doe</p>
-              <p className="text-xs text-neutral-500">@johndoe</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
+      <LeftSidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onSignOut={handleSignOut}
+      />
       {/* Main Content */}
       <main className="ml-72 mr-96 min-h-screen">
         <div className="max-w-3xl mx-auto px-8 py-8">
@@ -491,7 +576,7 @@ export default function SMLDashboard() {
           {/* Welcome Section */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 mb-8">
             <h2 className="text-xl font-serif text-neutral-200 mb-2">
-              Welcome back, Reader
+              Welcome back, {user ? user.name : "Reader"}
             </h2>
             <p className="text-neutral-500 text-sm">
               5 new reviews from writers you follow
@@ -558,124 +643,13 @@ export default function SMLDashboard() {
         </div>
       </main>
 
-      {/* Right Sidebar */}
-      <aside className="fixed right-0 top-0 h-screen w-96 bg-neutral-900 border-l border-neutral-800 p-6 overflow-y-auto">
-        <div className="flex items-center justify-end space-x-3 mb-8">
-          <button className="relative p-2 text-neutral-400 hover:bg-neutral-800 rounded-lg transition">
-            <Bell size={20} strokeWidth={1.5} />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-neutral-600 rounded-full"></span>
-          </button>
-        </div>
-
-        {/* Trending Books from Google Books API */}
-        <div className="mb-8">
-          <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-            <BookOpen
-              className="mr-2 text-neutral-500"
-              size={16}
-              strokeWidth={1.5}
-            />
-            Trending Books
-          </h3>
-          {loadingTrending ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader className="animate-spin text-neutral-600" size={24} />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {trendingBooks.map((book, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
-                >
-                  <p className="font-medium text-neutral-300 text-sm truncate">
-                    {book.title}
-                  </p>
-                  <p className="text-xs text-neutral-500 mt-1">
-                    by {book.author}
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-neutral-600">
-                      {book.category}
-                    </span>
-                    <span className="text-xs text-neutral-600">
-                      {book.discussions} discussions
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Internal Trending Topics */}
-        <div className="mb-8">
-          <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-            <Hash
-              className="mr-2 text-neutral-500"
-              size={16}
-              strokeWidth={1.5}
-            />
-            Trending in SML
-          </h3>
-          <div className="space-y-2">
-            {internalTrending.map((topic, idx) => (
-              <div
-                key={idx}
-                className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-neutral-300 text-sm">
-                    #{topic.tag}
-                  </p>
-                  <span className="text-xs text-neutral-500">
-                    {topic.growth}
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-600 mt-1">
-                  {topic.posts} posts
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Suggested Writers */}
-        <div>
-          <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-            <Users
-              className="mr-2 text-neutral-500"
-              size={16}
-              strokeWidth={1.5}
-            />
-            Suggested Writers
-          </h3>
-          <div className="space-y-3">
-            {suggestedWriters.map((writer, idx) => (
-              <div
-                key={idx}
-                className="p-4 bg-neutral-800/50 border border-neutral-800 rounded-lg"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-medium text-neutral-300 text-sm">
-                      {writer.name}
-                    </p>
-                    <p className="text-xs text-neutral-600">{writer.handle}</p>
-                  </div>
-                  <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded text-xs font-medium transition">
-                    Follow
-                  </button>
-                </div>
-                <p className="text-xs text-neutral-500">{writer.bio}</p>
-                <p className="text-xs text-neutral-600 mt-2">
-                  {writer.followers} followers
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </aside>
+      {/* Right Sidebar Component */}
+      <RightSidebar
+        trendingBooks={trendingBooks}
+        loadingTrending={loadingTrending}
+        internalTrending={internalTrending}
+        suggestedWriters={suggestedWriters}
+      />
     </div>
   );
 }
