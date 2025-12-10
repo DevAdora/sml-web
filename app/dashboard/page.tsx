@@ -86,7 +86,7 @@ function RightSidebar({
   suggestedWriters,
 }: RightSidebarProps) {
   return (
-    <aside className="fixed right-0 top-0 h-screen w-96 bg-neutral-900 border-l border-neutral-800 p-6 overflow-y-auto">
+    <aside className="fixed right-0 top-0 h-screen w-96 bg-neutral-900 border-l border-neutral-800 p-6 overflow-y-auto  [scrollbar-width:none]">
       {/* Notifications */}
       <div className="flex items-center justify-end space-x-3 mb-8">
         <button className="relative p-2 text-neutral-400 hover:bg-neutral-800 rounded-lg transition">
