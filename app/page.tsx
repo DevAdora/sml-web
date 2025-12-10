@@ -9,32 +9,9 @@ export default function Home() {
         <div className="space-y-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Image
-                className="dark:invert"
-                src="/next.svg"
-                alt="Next.js logo"
-                width={92}
-                height={18}
-                priority
-              />
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
                 sml-web
               </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Link
-                href="/auth"
-                className="rounded-full border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-900 dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-              >
-                Sign in
-              </Link>
-              <Link
-                href="/me"
-                className="rounded-full bg-zinc-900 text-white dark:bg-zinc-50 dark:text-black px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
-              >
-                Account
-              </Link>
             </div>
           </div>
 
@@ -53,27 +30,18 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Quick actions */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="flex items-center gap-2">
             <Link
-              href="/auth"
-              className="h-12 rounded-2xl bg-zinc-900 text-white dark:bg-zinc-50 dark:text-black flex items-center justify-center font-medium hover:opacity-90 transition-opacity"
+              href="/auth/signup"
+              className="rounded-full border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-medium text-zinc-900 dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
             >
-              Get started
+              Sign in
             </Link>
-
             <Link
-              href="/ping"
-              className="h-12 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center font-medium text-zinc-900 dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+              href="/auth/login"
+              className="rounded-full bg-zinc-900 text-white dark:bg-zinc-50 dark:text-black px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              Test Supabase (/ping)
-            </Link>
-
-            <Link
-              href="/me"
-              className="h-12 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center font-medium text-zinc-900 dark:text-zinc-50 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-            >
-              Protected page (/me)
+              Login
             </Link>
           </div>
         </div>
