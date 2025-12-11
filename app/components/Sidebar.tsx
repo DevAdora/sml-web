@@ -15,6 +15,7 @@ import {
   LogOut,
   Settings,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface UserProfile {
   id: string;
@@ -45,6 +46,7 @@ export default function LeftSidebar({
   const [showUserMenu, setShowUserMenu] = useState<boolean>(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
+  const router = useRouter();
 
   const navItems: NavItem[] = [
     { id: "feed", label: "Home", icon: <Home size={20} strokeWidth={1.5} /> },
@@ -99,7 +101,6 @@ export default function LeftSidebar({
           return;
         }
 
-        // Extract username from email if not provided
         const username = data.username || data.email.split("@")[0];
 
         let avatar = "";
@@ -167,7 +168,10 @@ export default function LeftSidebar({
       </div>
 
       {/* Write Review Button */}
-      <button className="w-full bg-neutral-800 hover:bg-neutral-700 text-neutral-100 px-6 py-3 rounded-lg font-medium transition flex items-center justify-center space-x-2 border border-neutral-700">
+      <button
+        onClick={() => router.push("/dashboard/posts")}
+        className="w-full bg-neutral-800 hover:bg-neutral-700 text-neutral-100 px-6 py-3 rounded-lg font-medium transition flex items-center justify-center space-x-2 border border-neutral-700"
+      >
         <PenTool size={18} strokeWidth={1.5} />
         <span>Write Review</span>
       </button>
@@ -220,7 +224,10 @@ export default function LeftSidebar({
         ) : (
           <div className="text-center">
             <p className="text-xs text-neutral-500 mb-3">Not signed in</p>
-            <button className="w-full px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm transition border border-neutral-700">
+            <button
+              onClick={() => router.push("/auth/login")}
+              className="w-full px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg text-sm transition border border-neutral-700"
+            >
               Sign In
             </button>
           </div>
