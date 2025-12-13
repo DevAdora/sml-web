@@ -27,18 +27,76 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const page = parseInt(searchParams.get('page') || '1');
         const limit = parseInt(searchParams.get('limit') || '10');
+        const unlimited = searchParams.get('unlimited') === 'true';
 
-        // Calculate offset for pagination
-        const offset = (page - 1) * limit;
-
-        // Fetch posts with pagination
-        const { data: posts, error: postsError } = await supabase
+        // First, get the total count of published posts
+        const { count: totalCount, error: countError } = await supabase
             .schema("sml")
             .from("posts")
-            .select("*")
-            .eq("status", "published")
-            .order("published_at", { ascending: false })
-            .range(offset, offset + limit - 1); // Pagination range
+            .select("*", { count: 'exact', head: true })
+            .eq("status", "published");
+
+        if (countError) {
+            console.error("Count error:", countError);
+        }
+
+        const actualTotalPosts = totalCount || 0;
+        console.log(`Total posts in database: ${actualTotalPosts}`);
+
+        let posts;
+        let postsError;
+
+        if (unlimited && actualTotalPosts > 0) {
+            // UNLIMITED MODE: Cycle through posts indefinitely
+            // Calculate which "cycle" we're in and the offset within that cycle
+            const postsPerCycle = actualTotalPosts;
+            const cycleNumber = Math.floor(((page - 1) * limit) / postsPerCycle);
+            const offsetWithinCycle = ((page - 1) * limit) % postsPerCycle;
+
+            console.log(`Unlimited mode - Page: ${page}, Cycle: ${cycleNumber}, Offset: ${offsetWithinCycle}`);
+
+            // Fetch posts with cycling
+            const result = await supabase
+                .schema("sml")
+                .from("posts")
+                .select("*")
+                .eq("status", "published")
+                .order("published_at", { ascending: false })
+                .range(offsetWithinCycle, offsetWithinCycle + limit - 1);
+
+            posts = result.data;
+            postsError = result.error;
+
+            // If we don't have enough posts to fill the limit, wrap around
+            if (posts && posts.length < limit && actualTotalPosts > 0) {
+                const remaining = limit - posts.length;
+                const wrapResult = await supabase
+                    .schema("sml")
+                    .from("posts")
+                    .select("*")
+                    .eq("status", "published")
+                    .order("published_at", { ascending: false })
+                    .range(0, remaining - 1);
+
+                if (wrapResult.data) {
+                    posts = [...posts, ...wrapResult.data];
+                }
+            }
+        } else {
+            // NORMAL MODE: Standard pagination
+            const offset = (page - 1) * limit;
+
+            const result = await supabase
+                .schema("sml")
+                .from("posts")
+                .select("*")
+                .eq("status", "published")
+                .order("published_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            posts = result.data;
+            postsError = result.error;
+        }
 
         if (postsError) {
             console.error("Fetch posts error:", postsError);
@@ -54,7 +112,7 @@ export async function GET(request: Request) {
                     success: true,
                     posts: [],
                     count: 0,
-                    hasMore: false,
+                    hasMore: unlimited ? true : false, // In unlimited mode, always more
                 },
                 { status: 200 }
             );
@@ -89,17 +147,22 @@ export async function GET(request: Request) {
             };
         });
 
-        // Check if there are more posts
-        // Fetch one more post to see if there's a next page
-        const { data: nextPageCheck } = await supabase
-            .schema("sml")
-            .from("posts")
-            .select("id")
-            .eq("status", "published")
-            .order("published_at", { ascending: false })
-            .range(offset + limit, offset + limit);
+        // Determine if there are more posts
+        let hasMore = unlimited ? true : false; // In unlimited mode, always true
 
-        const hasMore = nextPageCheck && nextPageCheck.length > 0;
+        if (!unlimited) {
+            // Check if there are more posts in normal mode
+            const offset = (page - 1) * limit;
+            const { data: nextPageCheck } = await supabase
+                .schema("sml")
+                .from("posts")
+                .select("id")
+                .eq("status", "published")
+                .order("published_at", { ascending: false })
+                .range(offset + limit, offset + limit);
+
+            hasMore = (nextPageCheck?.length ?? 0) > 0;
+        }
 
         return NextResponse.json(
             {
@@ -109,6 +172,8 @@ export async function GET(request: Request) {
                 page: page,
                 limit: limit,
                 hasMore: hasMore,
+                unlimited: unlimited,
+                totalPostsInDB: actualTotalPosts,
             },
             { status: 200 }
         );

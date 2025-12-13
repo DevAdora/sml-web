@@ -75,7 +75,6 @@ export default function SMLDashboard() {
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState<boolean>(true);
   const [page, setPage] = useState<number>(1);
-  const [hasMore, setHasMore] = useState<boolean>(true);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [fetchedExternalAPIs, setFetchedExternalAPIs] =
     useState<boolean>(false);
@@ -135,7 +134,7 @@ export default function SMLDashboard() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Fetch external APIs (NY Times & Guardian) - only once
+  // Fetch external APIs (NY Times & Guardian)
   const fetchExternalAPIs = async () => {
     const externalPosts: FeedPost[] = [];
 
@@ -228,7 +227,7 @@ export default function SMLDashboard() {
     return externalPosts;
   };
 
-  // Fetch more posts function
+  // Fetch more posts function with UNLIMITED scrolling
   const fetchMorePosts = async (pageNum: number) => {
     // Prevent duplicate fetches
     if (loadedPagesRef.current.has(pageNum) || isLoadingMore) {
@@ -243,10 +242,10 @@ export default function SMLDashboard() {
     try {
       const newPosts: FeedPost[] = [];
 
-      // Fetch local posts with pagination
+      // Fetch local posts with pagination (API will cycle data automatically)
       try {
         const localResponse = await fetch(
-          `/api/posts?page=${pageNum}&limit=10`,
+          `/api/posts?page=${pageNum}&limit=10&unlimited=true`,
           {
             method: "GET",
             credentials: "include",
@@ -259,15 +258,18 @@ export default function SMLDashboard() {
 
           if (localData.posts && localData.posts.length > 0) {
             const transformedPosts: FeedPost[] = localData.posts.map(
-              (post: any) => {
+              (post: any, index: number) => {
                 const authorName = post.author_name || "Anonymous";
                 const avatar =
                   authorName === "Anonymous"
                     ? "AN"
                     : generateAvatar(authorName);
 
+                // Create unique IDs for recycled posts by adding page and index
+                const uniqueId = `local-${post.id}-p${pageNum}-${index}`;
+
                 return {
-                  id: `local-${post.id}`, // Add prefix to ensure unique IDs
+                  id: uniqueId,
                   title: post.title,
                   author: authorName,
                   author_id: post.author_id,
@@ -289,17 +291,6 @@ export default function SMLDashboard() {
 
             newPosts.push(...transformedPosts);
             console.log(`Added ${transformedPosts.length} local posts`);
-
-            // Check if there are more posts from API
-            if (localData.hasMore === false) {
-              console.log("No more local posts available");
-              setHasMore(false);
-            }
-          } else {
-            console.log("No local posts returned");
-            if (pageNum > 1) {
-              setHasMore(false);
-            }
           }
         }
       } catch (error) {
@@ -310,9 +301,35 @@ export default function SMLDashboard() {
       if (pageNum === 1 && !fetchedExternalAPIs) {
         console.log("Fetching external APIs...");
         const externalPosts = await fetchExternalAPIs();
-        newPosts.push(...externalPosts);
-        console.log(`Added ${externalPosts.length} external posts`);
+
+        // Add unique identifiers to external posts
+        const uniqueExternalPosts = externalPosts.map((post, index) => ({
+          ...post,
+          id: `${post.id}-p1-${index}`,
+        }));
+
+        newPosts.push(...uniqueExternalPosts);
+        console.log(`Added ${uniqueExternalPosts.length} external posts`);
         setFetchedExternalAPIs(true);
+      }
+
+      // For subsequent pages, cycle external API data every 3 pages
+      if (pageNum > 1 && pageNum % 3 === 0) {
+        console.log("Adding recycled external API posts...");
+        const recycledExternalPosts = await fetchExternalAPIs();
+
+        // Add unique identifiers for recycled external posts
+        const uniqueRecycledPosts = recycledExternalPosts.map(
+          (post, index) => ({
+            ...post,
+            id: `${post.id}-p${pageNum}-${index}`,
+          })
+        );
+
+        newPosts.push(...uniqueRecycledPosts);
+        console.log(
+          `Added ${uniqueRecycledPosts.length} recycled external posts`
+        );
       }
 
       // Sort by date
@@ -475,16 +492,12 @@ export default function SMLDashboard() {
     loadInitialPosts();
   }, []); // Empty dependency array - only run once
 
-  // Intersection Observer for infinite scroll
+  // Intersection Observer for infinite scroll (UNLIMITED)
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          hasMore &&
-          !isLoadingMore &&
-          !loadingPosts
-        ) {
+        // Always load more when scrolled to bottom (no hasMore check)
+        if (entries[0].isIntersecting && !isLoadingMore && !loadingPosts) {
           console.log("Intersection detected, loading more...");
           setPage((prev) => prev + 1);
         }
@@ -502,7 +515,7 @@ export default function SMLDashboard() {
         observer.unobserve(currentTarget);
       }
     };
-  }, [hasMore, isLoadingMore, loadingPosts]);
+  }, [isLoadingMore, loadingPosts]); // Removed hasMore dependency
 
   // Load more when page changes
   useEffect(() => {
@@ -694,7 +707,7 @@ export default function SMLDashboard() {
                 )}
               </div>
 
-              {/* Infinite Scroll Trigger & Loading Indicator */}
+              {/* Infinite Scroll Trigger & Loading Indicator (ALWAYS ACTIVE) */}
               {feedPosts.length > 0 && (
                 <div ref={observerTarget} className="py-8">
                   {isLoadingMore && (
@@ -707,11 +720,6 @@ export default function SMLDashboard() {
                         Loading more posts...
                       </p>
                     </div>
-                  )}
-                  {!hasMore && !isLoadingMore && (
-                    <p className="text-center text-neutral-500 text-sm">
-                      You've reached the end of the feed
-                    </p>
                   )}
                 </div>
               )}
