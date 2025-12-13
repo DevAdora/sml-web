@@ -15,7 +15,7 @@ import {
   LogOut,
   Settings,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 interface UserProfile {
   id: string;
@@ -30,51 +30,57 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   badge?: number;
+  href: string; // Add href for routing
 }
 
 interface LeftSidebarProps {
-  activeTab: string;
-  onTabChange: (tab: string) => void;
   onSignOut: () => void;
 }
 
-export default function LeftSidebar({
-  activeTab,
-  onTabChange,
-  onSignOut,
-}: LeftSidebarProps) {
+export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
   const [showUserMenu, setShowUserMenu] = useState<boolean>(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   const navItems: NavItem[] = [
-    { id: "feed", label: "Home", icon: <Home size={20} strokeWidth={1.5} /> },
+    {
+      id: "feed",
+      label: "Home",
+      icon: <Home size={20} strokeWidth={1.5} />,
+      href: "/dashboard",
+    },
     {
       id: "discover",
       label: "Discover",
       icon: <Compass size={20} strokeWidth={1.5} />,
+      href: "/dashboard/discover",
     },
     {
       id: "trending",
       label: "Trending",
       icon: <TrendingUp size={20} strokeWidth={1.5} />,
+      href: "/dashboard/trending",
     },
     {
       id: "lists",
       label: "Reading Lists",
       icon: <Bookmark size={20} strokeWidth={1.5} />,
+      href: "/dashboard/lists",
     },
     {
       id: "messages",
       label: "Messages",
       icon: <MessageCircle size={20} strokeWidth={1.5} />,
+      href: "/dashboard/messages",
       badge: 2,
     },
     {
       id: "profile",
       label: "Profile",
       icon: <User size={20} strokeWidth={1.5} />,
+      href: "/dashboard/profile",
     },
   ];
 
@@ -85,7 +91,7 @@ export default function LeftSidebar({
       try {
         const response = await fetch("/api/user", {
           method: "GET",
-          credentials: "include", // Important for cookies
+          credentials: "include",
         });
 
         if (!response.ok) {
@@ -93,7 +99,6 @@ export default function LeftSidebar({
         }
 
         const data = await response.json();
-        console.log("AUTH USER API:", data);
 
         if (!data.authenticated) {
           setUser(null);
@@ -134,6 +139,13 @@ export default function LeftSidebar({
     fetchUserProfile();
   }, []);
 
+  const isActive = (href: string) => {
+    if (href === "/dashboard") {
+      return pathname === "/dashboard";
+    }
+    return pathname?.startsWith(href);
+  };
+
   return (
     <aside className="fixed left-0 top-0 h-screen w-72 bg-neutral-900 border-r border-neutral-800 p-6 overflow-y-auto">
       <div className="mb-8">
@@ -148,9 +160,9 @@ export default function LeftSidebar({
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => onTabChange(item.id)}
+              onClick={() => router.push(item.href)}
               className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
-                activeTab === item.id
+                isActive(item.href)
                   ? "bg-neutral-800 text-neutral-100"
                   : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-300"
               }`}
@@ -182,7 +194,7 @@ export default function LeftSidebar({
             <Loader className="animate-spin text-neutral-600" size={20} />
           </div>
         ) : user ? (
-          <div className="relative ">
+          <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-800/50 transition cursor-pointer"

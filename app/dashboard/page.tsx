@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import LeftSidebar from "@/app/components/Sidebar";
+import { RightSidebar } from "../components/TrendingBar";
 
 // ==================== TYPES ====================
 interface TrendingBook {
@@ -67,152 +68,6 @@ interface UserProfile {
 }
 
 // ==================== RIGHT SIDEBAR COMPONENT ====================
-interface RightSidebarProps {
-  trendingBooks: TrendingBook[];
-  loadingTrending: boolean;
-  internalTrending: TrendingTopic[];
-  suggestedWriters: SuggestedWriter[];
-}
-
-function RightSidebar({
-  trendingBooks,
-  loadingTrending,
-  internalTrending,
-  suggestedWriters,
-}: RightSidebarProps) {
-  const handleBookClick = (link?: string) => {
-    if (link) {
-      window.open(link, "_blank");
-    }
-  };
-
-  return (
-    <aside className="fixed right-0 top-0 h-screen w-96 bg-neutral-900 border-l border-neutral-800 p-6 overflow-y-auto [scrollbar-width:none]">
-      {/* Notifications */}
-      <div className="flex items-center justify-end space-x-3 mb-8">
-        <button className="relative p-2 text-neutral-400 hover:bg-neutral-800 rounded-lg transition">
-          <Bell size={20} strokeWidth={1.5} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-neutral-600 rounded-full"></span>
-        </button>
-      </div>
-
-      {/* Trending Books from Google Books API */}
-      <div className="mb-8">
-        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-          <BookOpen
-            className="mr-2 text-neutral-500"
-            size={16}
-            strokeWidth={1.5}
-          />
-          Trending Books
-        </h3>
-        {loadingTrending ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader className="animate-spin text-neutral-600" size={24} />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {trendingBooks.map((book, idx) => (
-              <div
-                key={idx}
-                onClick={() => handleBookClick(book.link)}
-                className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer group"
-              >
-                <div className="flex items-start justify-between">
-                  <p className="font-medium text-neutral-300 text-sm truncate flex-1">
-                    {book.title}
-                  </p>
-                  {book.link && (
-                    <ExternalLink
-                      size={14}
-                      className="text-neutral-600 group-hover:text-neutral-400 ml-2 flex-shrink-0"
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-neutral-500 mt-1">
-                  by {book.author}
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-neutral-600">
-                    {book.category}
-                  </span>
-                  <span className="text-xs text-neutral-600">
-                    {book.discussions} discussions
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Internal Trending Topics */}
-      <div className="mb-8">
-        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-          <Hash className="mr-2 text-neutral-500" size={16} strokeWidth={1.5} />
-          Trending in SML
-        </h3>
-        <div className="space-y-2">
-          {internalTrending.map((topic, idx) => (
-            <div
-              key={idx}
-              className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-neutral-300 text-sm">
-                  #{topic.tag}
-                </p>
-                <span className="text-xs text-neutral-500">{topic.growth}</span>
-              </div>
-              <p className="text-xs text-neutral-600 mt-1">
-                {topic.posts} posts
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Suggested Writers */}
-      <div>
-        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-          <Users
-            className="mr-2 text-neutral-500"
-            size={16}
-            strokeWidth={1.5}
-          />
-          Suggested Writers
-        </h3>
-        <div className="space-y-3">
-          {suggestedWriters.map((writer, idx) => (
-            <div
-              key={idx}
-              className="p-4 bg-neutral-800/50 border border-neutral-800 rounded-lg"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="font-medium text-neutral-300 text-sm">
-                    {writer.name}
-                  </p>
-                  <p className="text-xs text-neutral-600">{writer.handle}</p>
-                </div>
-                <button
-                  onClick={() => alert("Please sign in to follow writers")}
-                  className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded text-xs font-medium transition"
-                >
-                  Follow
-                </button>
-              </div>
-              <p className="text-xs text-neutral-500">{writer.bio}</p>
-              <p className="text-xs text-neutral-600 mt-2">
-                {writer.followers} followers
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
-  );
-}
 
 // ==================== MAIN DASHBOARD COMPONENT ====================
 export default function SMLDashboard() {
@@ -338,7 +193,6 @@ export default function SMLDashboard() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Fetch user profile
   useEffect(() => {
     const fetchUserProfile = async () => {
       setLoadingUser(true);
@@ -387,7 +241,6 @@ export default function SMLDashboard() {
     fetchUserProfile();
   }, []);
 
-  // Fetch trending books from Google Books API
   useEffect(() => {
     const fetchTrendingBooks = async () => {
       setLoadingTrending(true);
@@ -462,14 +315,12 @@ export default function SMLDashboard() {
     fetchTrendingBooks();
   }, []);
 
-  // Fetch posts from both local API and external APIs
   useEffect(() => {
     const fetchAllPosts = async () => {
       setLoadingPosts(true);
       try {
         const allPosts: FeedPost[] = [];
 
-        // 1. Fetch local user posts from /api/posts
         try {
           const localResponse = await fetch("/api/posts", {
             method: "GET",
@@ -516,7 +367,6 @@ export default function SMLDashboard() {
           console.error("Error fetching local posts:", error);
         }
 
-        // 2. Fetch from NY Times Books API
         try {
           const nytResponse = await fetch(
             "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=DEMO_KEY"
@@ -566,7 +416,6 @@ export default function SMLDashboard() {
           console.error("Error fetching NY Times books:", error);
         }
 
-        // 3. Fetch from Guardian Books API
         try {
           const guardianResponse = await fetch(
             "https://content.guardianapis.com/search?section=books&show-fields=trailText,thumbnail&api-key=test"
@@ -605,12 +454,9 @@ export default function SMLDashboard() {
           console.error("Error fetching Guardian articles:", error);
         }
 
-        // 4. Add dummy posts if we have very few posts
         if (allPosts.length < 3) {
           allPosts.push(...dummyPosts);
         }
-
-        // Sort by created_at date (newest first)
         allPosts.sort((a, b) => {
           return (
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -640,10 +486,8 @@ export default function SMLDashboard() {
       });
 
       if (response.ok) {
-        // Clear user state immediately
         setUser(null);
 
-        // Redirect to home or auth page instead of just reloading
         window.location.href = "/";
       } else {
         console.error("Sign out failed");
@@ -655,10 +499,6 @@ export default function SMLDashboard() {
     }
   };
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    console.log("Active tab:", tab);
-  };
 
   const handlePostClick = (post: FeedPost) => {
     if (post.link && post.isExternal) {
@@ -676,16 +516,10 @@ export default function SMLDashboard() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
-      <LeftSidebar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onSignOut={handleSignOut}
-      />
+      <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* Main Content */}
       <main className="ml-72 mr-96 min-h-screen">
         <div className="max-w-3xl mx-auto px-8 py-8">
-          {/* Search Bar */}
           <div className="mb-8">
             <div className="relative">
               <Search
