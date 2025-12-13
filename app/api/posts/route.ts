@@ -23,13 +23,22 @@ export async function GET(request: Request) {
     );
 
     try {
+        // Get pagination parameters from URL
+        const { searchParams } = new URL(request.url);
+        const page = parseInt(searchParams.get('page') || '1');
+        const limit = parseInt(searchParams.get('limit') || '10');
+
+        // Calculate offset for pagination
+        const offset = (page - 1) * limit;
+
+        // Fetch posts with pagination
         const { data: posts, error: postsError } = await supabase
             .schema("sml")
             .from("posts")
             .select("*")
             .eq("status", "published")
             .order("published_at", { ascending: false })
-            .limit(20);
+            .range(offset, offset + limit - 1); // Pagination range
 
         if (postsError) {
             console.error("Fetch posts error:", postsError);
@@ -45,13 +54,16 @@ export async function GET(request: Request) {
                     success: true,
                     posts: [],
                     count: 0,
+                    hasMore: false,
                 },
                 { status: 200 }
             );
         }
 
+        // Get unique author IDs
         const authorIds = [...new Set(posts.map(post => post.author_id))];
 
+        // Fetch author profiles
         const { data: profiles, error: profilesError } = await supabase
             .schema("sml")
             .from("profiles")
@@ -62,11 +74,13 @@ export async function GET(request: Request) {
             console.error("Fetch profiles error:", profilesError);
         }
 
+        // Create profile map for quick lookup
         const profileMap = new Map();
         (profiles || []).forEach(profile => {
             profileMap.set(profile.id, profile);
         });
 
+        // Combine posts with author information
         const postsWithAuthors = posts.map(post => {
             const authorProfile = profileMap.get(post.author_id);
             return {
@@ -75,11 +89,26 @@ export async function GET(request: Request) {
             };
         });
 
+        // Check if there are more posts
+        // Fetch one more post to see if there's a next page
+        const { data: nextPageCheck } = await supabase
+            .schema("sml")
+            .from("posts")
+            .select("id")
+            .eq("status", "published")
+            .order("published_at", { ascending: false })
+            .range(offset + limit, offset + limit);
+
+        const hasMore = nextPageCheck && nextPageCheck.length > 0;
+
         return NextResponse.json(
             {
                 success: true,
                 posts: postsWithAuthors,
                 count: postsWithAuthors.length,
+                page: page,
+                limit: limit,
+                hasMore: hasMore,
             },
             { status: 200 }
         );
