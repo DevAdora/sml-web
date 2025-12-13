@@ -176,13 +176,13 @@ export default function LeftSidebar({
         <span>Write Review</span>
       </button>
 
-      <div className="mt-8 pt-8 border-t border-neutral-800">
+      <div className="mt-8 pt-2 border-t border-neutral-800">
         {loadingUser ? (
           <div className="flex items-center justify-center py-4">
             <Loader className="animate-spin text-neutral-600" size={20} />
           </div>
         ) : user ? (
-          <div className="relative">
+          <div className="relative ">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-neutral-800/50 transition cursor-pointer"
