@@ -151,8 +151,9 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
       <div className="mb-8">
         {/* Logo */}
         <div className="flex items-center space-x-3 mb-8">
-          <BookOpen className="text-neutral-400" size={36} strokeWidth={1.5} />
-          <h1 className="text-3xl font-serif text-neutral-300">SML</h1>
+          <h1 className="text-xl font-serif text-neutral-300">
+            Scriptum Mens Lumen
+          </h1>
         </div>
 
         {/* Navigation */}

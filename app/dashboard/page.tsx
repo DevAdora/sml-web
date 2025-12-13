@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BookOpen,
   MessageCircle,
@@ -67,78 +67,20 @@ interface UserProfile {
   email: string;
 }
 
-// ==================== RIGHT SIDEBAR COMPONENT ====================
-
-// ==================== MAIN DASHBOARD COMPONENT ====================
 export default function SMLDashboard() {
-  const [activeTab, setActiveTab] = useState<string>("feed");
   const [trendingBooks, setTrendingBooks] = useState<TrendingBook[]>([]);
   const [loadingTrending, setLoadingTrending] = useState<boolean>(true);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState<boolean>(true);
+  const [page, setPage] = useState<number>(1);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [fetchedExternalAPIs, setFetchedExternalAPIs] =
+    useState<boolean>(false);
 
-  // Dummy data as fallback
-  const dummyPosts: FeedPost[] = [
-    {
-      id: "dummy-1",
-      title: "Why 'The Midnight Library' Changed My Perspective on Life",
-      author: "Sarah Mitchell",
-      author_id: "dummy",
-      avatar: "SM",
-      genre: "Fiction",
-      likes: 234,
-      comments: 45,
-      readTime: "8 min",
-      excerpt:
-        "Matt Haig's novel isn't just about parallel universes—it's a profound meditation on regret, choice, and the infinite possibilities of existence...",
-      timestamp: "2 hours ago",
-      likes_count: 234,
-      comments_count: 45,
-      read_time: 8,
-      created_at: new Date().toISOString(),
-      isExternal: false,
-    },
-    {
-      id: "dummy-2",
-      title: "A Deep Dive into Murakami's Surrealism",
-      author: "James Chen",
-      author_id: "dummy",
-      avatar: "JC",
-      genre: "Literary Analysis",
-      likes: 189,
-      comments: 32,
-      readTime: "12 min",
-      excerpt:
-        "Haruki Murakami's work exists in a liminal space between dream and reality, where cats talk, and wells become portals to other dimensions...",
-      timestamp: "5 hours ago",
-      likes_count: 189,
-      comments_count: 32,
-      read_time: 12,
-      created_at: new Date().toISOString(),
-      isExternal: false,
-    },
-    {
-      id: "dummy-3",
-      title: "Top 10 Sci-Fi Books That Predicted Our Future",
-      author: "Alex Rodriguez",
-      author_id: "dummy",
-      avatar: "AR",
-      genre: "Lists",
-      likes: 412,
-      comments: 78,
-      readTime: "6 min",
-      excerpt:
-        "From AI sentience to climate collapse, these science fiction novels saw our present coming decades before we arrived...",
-      timestamp: "8 hours ago",
-      likes_count: 412,
-      comments_count: 78,
-      read_time: 6,
-      created_at: new Date().toISOString(),
-      isExternal: false,
-    },
-  ];
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const loadedPagesRef = useRef<Set<number>>(new Set());
 
   const internalTrending: TrendingTopic[] = [
     { tag: "literary-fiction", posts: "2.3k", growth: "+12%" },
@@ -169,7 +111,6 @@ export default function SMLDashboard() {
     },
   ];
 
-  // Helper function to get relative time
   const getRelativeTime = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
@@ -193,6 +134,229 @@ export default function SMLDashboard() {
     return name.substring(0, 2).toUpperCase();
   };
 
+  // Fetch external APIs (NY Times & Guardian)
+  const fetchExternalAPIs = async () => {
+    const externalPosts: FeedPost[] = [];
+
+    // NY Times Books API
+    try {
+      const nytResponse = await fetch(
+        "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=DEMO_KEY"
+      );
+      const nytData = await nytResponse.json();
+
+      if (nytData.results && nytData.results.lists) {
+        nytData.results.lists.forEach((list: any) => {
+          list.books.slice(0, 2).forEach((book: any) => {
+            externalPosts.push({
+              id: `nyt-${book.primary_isbn13}`,
+              title: `Review: ${book.title}`,
+              author: book.author,
+              author_id: "nyt-books",
+              avatar: generateAvatar(book.author),
+              genre: list.list_name,
+              likes: Math.floor(Math.random() * 500) + 100,
+              comments: Math.floor(Math.random() * 100) + 10,
+              readTime: `${Math.floor(Math.random() * 10) + 5} min`,
+              excerpt:
+                book.description ||
+                `A fascinating look at ${book.title} by ${book.author}.`,
+              timestamp: getRelativeTime(
+                new Date(
+                  Date.now() - Math.random() * 86400000 * 3
+                ).toISOString()
+              ),
+              link:
+                book.amazon_product_url ||
+                (book.buy_links && book.buy_links[0]
+                  ? book.buy_links[0].url
+                  : undefined),
+              source: "NY Times Books",
+              likes_count: Math.floor(Math.random() * 500) + 100,
+              comments_count: Math.floor(Math.random() * 100) + 10,
+              read_time: Math.floor(Math.random() * 10) + 5,
+              created_at: new Date(
+                Date.now() - Math.random() * 86400000 * 3
+              ).toISOString(),
+              isExternal: true,
+            });
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching NY Times books:", error);
+    }
+
+    // Guardian API
+    try {
+      const guardianResponse = await fetch(
+        "https://content.guardianapis.com/search?section=books&show-fields=trailText,thumbnail&page-size=10&api-key=test"
+      );
+      const guardianData = await guardianResponse.json();
+
+      if (guardianData.response && guardianData.response.results) {
+        guardianData.response.results.forEach((article: any) => {
+          externalPosts.push({
+            id: `guardian-${article.id}`,
+            title: article.webTitle,
+            author: "The Guardian",
+            author_id: "guardian-books",
+            avatar: "TG",
+            genre: "Book Review",
+            likes: Math.floor(Math.random() * 400) + 50,
+            comments: Math.floor(Math.random() * 80) + 5,
+            readTime: `${Math.floor(Math.random() * 8) + 4} min`,
+            excerpt:
+              (article.fields && article.fields.trailText) ||
+              "An insightful review from The Guardian Books section.",
+            timestamp: getRelativeTime(article.webPublicationDate),
+            link: article.webUrl,
+            source: "The Guardian",
+            likes_count: Math.floor(Math.random() * 400) + 50,
+            comments_count: Math.floor(Math.random() * 80) + 5,
+            read_time: Math.floor(Math.random() * 8) + 4,
+            created_at: article.webPublicationDate,
+            isExternal: true,
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching Guardian articles:", error);
+    }
+
+    return externalPosts;
+  };
+
+  // Fetch more posts function with UNLIMITED scrolling
+  const fetchMorePosts = async (pageNum: number) => {
+    // Prevent duplicate fetches
+    if (loadedPagesRef.current.has(pageNum) || isLoadingMore) {
+      console.log(`Page ${pageNum} already loaded or currently loading`);
+      return;
+    }
+
+    loadedPagesRef.current.add(pageNum);
+    setIsLoadingMore(true);
+    console.log(`Fetching page ${pageNum}...`);
+
+    try {
+      const newPosts: FeedPost[] = [];
+
+      // Fetch local posts with pagination (API will cycle data automatically)
+      try {
+        const localResponse = await fetch(
+          `/api/posts?page=${pageNum}&limit=10&unlimited=true`,
+          {
+            method: "GET",
+            credentials: "include",
+          }
+        );
+
+        if (localResponse.ok) {
+          const localData = await localResponse.json();
+          console.log(`Local API response for page ${pageNum}:`, localData);
+
+          if (localData.posts && localData.posts.length > 0) {
+            const transformedPosts: FeedPost[] = localData.posts.map(
+              (post: any, index: number) => {
+                const authorName = post.author_name || "Anonymous";
+                const avatar =
+                  authorName === "Anonymous"
+                    ? "AN"
+                    : generateAvatar(authorName);
+
+                // Create unique IDs for recycled posts by adding page and index
+                const uniqueId = `local-${post.id}-p${pageNum}-${index}`;
+
+                return {
+                  id: uniqueId,
+                  title: post.title,
+                  author: authorName,
+                  author_id: post.author_id,
+                  avatar: avatar,
+                  genre: post.genre,
+                  likes: post.likes_count || 0,
+                  comments: post.comments_count || 0,
+                  readTime: `${post.read_time} min`,
+                  excerpt: post.excerpt,
+                  timestamp: getRelativeTime(post.created_at),
+                  likes_count: post.likes_count || 0,
+                  comments_count: post.comments_count || 0,
+                  read_time: post.read_time,
+                  created_at: post.created_at,
+                  isExternal: false,
+                };
+              }
+            );
+
+            newPosts.push(...transformedPosts);
+            console.log(`Added ${transformedPosts.length} local posts`);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching local posts:", error);
+      }
+
+      // Fetch external APIs only on first page and only once
+      if (pageNum === 1 && !fetchedExternalAPIs) {
+        console.log("Fetching external APIs...");
+        const externalPosts = await fetchExternalAPIs();
+
+        // Add unique identifiers to external posts
+        const uniqueExternalPosts = externalPosts.map((post, index) => ({
+          ...post,
+          id: `${post.id}-p1-${index}`,
+        }));
+
+        newPosts.push(...uniqueExternalPosts);
+        console.log(`Added ${uniqueExternalPosts.length} external posts`);
+        setFetchedExternalAPIs(true);
+      }
+
+      // For subsequent pages, cycle external API data every 3 pages
+      if (pageNum > 1 && pageNum % 3 === 0) {
+        console.log("Adding recycled external API posts...");
+        const recycledExternalPosts = await fetchExternalAPIs();
+
+        // Add unique identifiers for recycled external posts
+        const uniqueRecycledPosts = recycledExternalPosts.map(
+          (post, index) => ({
+            ...post,
+            id: `${post.id}-p${pageNum}-${index}`,
+          })
+        );
+
+        newPosts.push(...uniqueRecycledPosts);
+        console.log(
+          `Added ${uniqueRecycledPosts.length} recycled external posts`
+        );
+      }
+
+      // Sort by date
+      newPosts.sort((a, b) => {
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+
+      console.log(`Total new posts to add: ${newPosts.length}`);
+
+      if (newPosts.length > 0) {
+        setFeedPosts((prev) => {
+          const combined = [...prev, ...newPosts];
+          console.log(`Total posts after update: ${combined.length}`);
+          return combined;
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching more posts:", error);
+      loadedPagesRef.current.delete(pageNum); // Remove from loaded if error
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Fetch user profile
   useEffect(() => {
     const fetchUserProfile = async () => {
       setLoadingUser(true);
@@ -241,6 +405,7 @@ export default function SMLDashboard() {
     fetchUserProfile();
   }, []);
 
+  // Fetch trending books
   useEffect(() => {
     const fetchTrendingBooks = async () => {
       setLoadingTrending(true);
@@ -315,165 +480,50 @@ export default function SMLDashboard() {
     fetchTrendingBooks();
   }, []);
 
+  // Initial posts load
   useEffect(() => {
-    const fetchAllPosts = async () => {
+    const loadInitialPosts = async () => {
+      console.log("Loading initial posts...");
       setLoadingPosts(true);
-      try {
-        const allPosts: FeedPost[] = [];
-
-        try {
-          const localResponse = await fetch("/api/posts", {
-            method: "GET",
-            credentials: "include",
-          });
-
-          if (localResponse.ok) {
-            const localData = await localResponse.json();
-
-            if (localData.posts && localData.posts.length > 0) {
-              const transformedPosts: FeedPost[] = localData.posts.map(
-                (post: any) => {
-                  const authorName = post.author_name || "Anonymous";
-                  const avatar =
-                    authorName === "Anonymous"
-                      ? "AN"
-                      : generateAvatar(authorName);
-
-                  return {
-                    id: post.id,
-                    title: post.title,
-                    author: authorName,
-                    author_id: post.author_id,
-                    avatar: avatar,
-                    genre: post.genre,
-                    likes: post.likes_count || 0,
-                    comments: post.comments_count || 0,
-                    readTime: `${post.read_time} min`,
-                    excerpt: post.excerpt,
-                    timestamp: getRelativeTime(post.created_at),
-                    likes_count: post.likes_count || 0,
-                    comments_count: post.comments_count || 0,
-                    read_time: post.read_time,
-                    created_at: post.created_at,
-                    isExternal: false,
-                  };
-                }
-              );
-
-              allPosts.push(...transformedPosts);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching local posts:", error);
-        }
-
-        try {
-          const nytResponse = await fetch(
-            "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=DEMO_KEY"
-          );
-          const nytData = await nytResponse.json();
-
-          if (nytData.results && nytData.results.lists) {
-            nytData.results.lists.slice(0, 2).forEach((list: any) => {
-              if (list.books && list.books[0]) {
-                const book = list.books[0];
-                allPosts.push({
-                  id: `nyt-${book.primary_isbn13}`,
-                  title: `Review: ${book.title}`,
-                  author: book.author,
-                  author_id: "nyt-books",
-                  avatar: generateAvatar(book.author),
-                  genre: list.list_name,
-                  likes: Math.floor(Math.random() * 500) + 100,
-                  comments: Math.floor(Math.random() * 100) + 10,
-                  readTime: `${Math.floor(Math.random() * 10) + 5} min`,
-                  excerpt:
-                    book.description ||
-                    `A fascinating look at ${book.title} by ${book.author}.`,
-                  timestamp: getRelativeTime(
-                    new Date(
-                      Date.now() - Math.random() * 86400000 * 3
-                    ).toISOString()
-                  ),
-                  link:
-                    book.amazon_product_url ||
-                    (book.buy_links && book.buy_links[0]
-                      ? book.buy_links[0].url
-                      : undefined),
-                  source: "NY Times Books",
-                  likes_count: Math.floor(Math.random() * 500) + 100,
-                  comments_count: Math.floor(Math.random() * 100) + 10,
-                  read_time: Math.floor(Math.random() * 10) + 5,
-                  created_at: new Date(
-                    Date.now() - Math.random() * 86400000 * 3
-                  ).toISOString(),
-                  isExternal: true,
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching NY Times books:", error);
-        }
-
-        try {
-          const guardianResponse = await fetch(
-            "https://content.guardianapis.com/search?section=books&show-fields=trailText,thumbnail&api-key=test"
-          );
-          const guardianData = await guardianResponse.json();
-
-          if (guardianData.response && guardianData.response.results) {
-            guardianData.response.results
-              .slice(0, 3)
-              .forEach((article: any) => {
-                allPosts.push({
-                  id: article.id,
-                  title: article.webTitle,
-                  author: "The Guardian",
-                  author_id: "guardian-books",
-                  avatar: "TG",
-                  genre: "Book Review",
-                  likes: Math.floor(Math.random() * 400) + 50,
-                  comments: Math.floor(Math.random() * 80) + 5,
-                  readTime: `${Math.floor(Math.random() * 8) + 4} min`,
-                  excerpt:
-                    (article.fields && article.fields.trailText) ||
-                    "An insightful review from The Guardian Books section.",
-                  timestamp: getRelativeTime(article.webPublicationDate),
-                  link: article.webUrl,
-                  source: "The Guardian",
-                  likes_count: Math.floor(Math.random() * 400) + 50,
-                  comments_count: Math.floor(Math.random() * 80) + 5,
-                  read_time: Math.floor(Math.random() * 8) + 4,
-                  created_at: article.webPublicationDate,
-                  isExternal: true,
-                });
-              });
-          }
-        } catch (error) {
-          console.error("Error fetching Guardian articles:", error);
-        }
-
-        if (allPosts.length < 3) {
-          allPosts.push(...dummyPosts);
-        }
-        allPosts.sort((a, b) => {
-          return (
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-        });
-
-        setFeedPosts(allPosts);
-      } catch (error) {
-        console.error("Error fetching posts:", error);
-        setFeedPosts(dummyPosts);
-      } finally {
-        setLoadingPosts(false);
-      }
+      await fetchMorePosts(1);
+      setLoadingPosts(false);
     };
 
-    fetchAllPosts();
-  }, []);
+    loadInitialPosts();
+  }, []); // Empty dependency array - only run once
+
+  // Intersection Observer for infinite scroll (UNLIMITED)
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Always load more when scrolled to bottom (no hasMore check)
+        if (entries[0].isIntersecting && !isLoadingMore && !loadingPosts) {
+          console.log("Intersection detected, loading more...");
+          setPage((prev) => prev + 1);
+        }
+      },
+      { threshold: 0.1, rootMargin: "100px" }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [isLoadingMore, loadingPosts]); // Removed hasMore dependency
+
+  // Load more when page changes
+  useEffect(() => {
+    if (page > 1 && !loadedPagesRef.current.has(page)) {
+      console.log(`Page changed to ${page}, fetching more posts...`);
+      fetchMorePosts(page);
+    }
+  }, [page]);
 
   const handleSignOut = async () => {
     try {
@@ -487,7 +537,6 @@ export default function SMLDashboard() {
 
       if (response.ok) {
         setUser(null);
-
         window.location.href = "/";
       } else {
         console.error("Sign out failed");
@@ -498,7 +547,6 @@ export default function SMLDashboard() {
       alert("An error occurred while signing out.");
     }
   };
-
 
   const handlePostClick = (post: FeedPost) => {
     if (post.link && post.isExternal) {
@@ -547,106 +595,139 @@ export default function SMLDashboard() {
 
           {/* Loading State */}
           {loadingPosts ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="animate-spin text-neutral-600" size={32} />
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader
+                className="animate-spin text-neutral-600 mb-4"
+                size={32}
+              />
+              <p className="text-neutral-500 text-sm">Loading posts...</p>
             </div>
           ) : (
             <>
               {/* Feed Posts */}
               <div className="space-y-6">
-                {feedPosts.map((post) => (
-                  <article
-                    key={post.id}
-                    className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer"
-                    onClick={() => post.isExternal && handlePostClick(post)}
-                  >
-                    <div className="flex items-center space-x-3 mb-4">
-                      <div className="w-9 h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium">
-                        {post.avatar}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-neutral-300 text-sm truncate">
-                          {post.author}
-                        </p>
-                        <div className="flex items-center space-x-2 text-xs text-neutral-600">
-                          <span>{post.timestamp}</span>
-                          <span>·</span>
-                          <span className="flex items-center">
-                            <Clock
-                              size={11}
-                              className="mr-1"
-                              strokeWidth={1.5}
-                            />
-                            {post.readTime}
-                          </span>
-                          {post.source && (
-                            <>
-                              <span>·</span>
-                              <span className="text-neutral-500">
-                                {post.source}
-                              </span>
-                            </>
-                          )}
+                {feedPosts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <BookOpen
+                      className="mx-auto text-neutral-700 mb-4"
+                      size={64}
+                      strokeWidth={1}
+                    />
+                    <h3 className="text-xl font-serif text-neutral-300 mb-2">
+                      No posts yet
+                    </h3>
+                    <p className="text-neutral-500">
+                      Be the first to share a review!
+                    </p>
+                  </div>
+                ) : (
+                  feedPosts.map((post) => (
+                    <article
+                      key={post.id}
+                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer"
+                      onClick={() => post.isExternal && handlePostClick(post)}
+                    >
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-9 h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium">
+                          {post.avatar}
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-neutral-300 text-sm truncate">
+                            {post.author}
+                          </p>
+                          <div className="flex items-center space-x-2 text-xs text-neutral-600">
+                            <span>{post.timestamp}</span>
+                            <span>·</span>
+                            <span className="flex items-center">
+                              <Clock
+                                size={11}
+                                className="mr-1"
+                                strokeWidth={1.5}
+                              />
+                              {post.readTime}
+                            </span>
+                            {post.source && (
+                              <>
+                                <span>·</span>
+                                <span className="text-neutral-500">
+                                  {post.source}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap">
+                          {post.genre}
+                        </span>
                       </div>
-                      <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap">
-                        {post.genre}
-                      </span>
-                    </div>
 
-                    <div className={post.isExternal ? "cursor-pointer" : ""}>
-                      <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words flex items-start">
-                        {post.title}
-                        {post.isExternal && post.link && (
-                          <ExternalLink
-                            size={16}
-                            className="ml-2 text-neutral-600 flex-shrink-0 mt-1"
-                          />
-                        )}
-                      </h3>
-                      <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
-                        {post.excerpt}
+                      <div className={post.isExternal ? "cursor-pointer" : ""}>
+                        <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words flex items-start">
+                          {post.title}
+                          {post.isExternal && post.link && (
+                            <ExternalLink
+                              size={16}
+                              className="ml-2 text-neutral-600 flex-shrink-0 mt-1"
+                            />
+                          )}
+                        </h3>
+                        <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
+                          {post.excerpt}
+                        </p>
+                      </div>
+
+                      <div
+                        className="flex items-center space-x-6 text-sm text-neutral-500"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => handleInteraction("like posts")}
+                          className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                        >
+                          <Star size={16} strokeWidth={1.5} />
+                          <span>{post.likes}</span>
+                        </button>
+                        <button
+                          onClick={() => handleInteraction("comment")}
+                          className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                        >
+                          <MessageCircle size={16} strokeWidth={1.5} />
+                          <span>{post.comments}</span>
+                        </button>
+                        <button
+                          onClick={() => handleInteraction("bookmark")}
+                          className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                        >
+                          <Bookmark size={16} strokeWidth={1.5} />
+                          <span>Save</span>
+                        </button>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+
+              {/* Infinite Scroll Trigger & Loading Indicator (ALWAYS ACTIVE) */}
+              {feedPosts.length > 0 && (
+                <div ref={observerTarget} className="py-8">
+                  {isLoadingMore && (
+                    <div className="flex flex-col items-center justify-center">
+                      <Loader
+                        className="animate-spin text-neutral-600 mb-2"
+                        size={32}
+                      />
+                      <p className="text-neutral-500 text-sm">
+                        Loading more posts...
                       </p>
                     </div>
-
-                    <div
-                      className="flex items-center space-x-6 text-sm text-neutral-500"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => handleInteraction("like posts")}
-                        className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                      >
-                        <Star size={16} strokeWidth={1.5} />
-                        <span>{post.likes}</span>
-                      </button>
-                      <button
-                        onClick={() => handleInteraction("comment")}
-                        className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                      >
-                        <MessageCircle size={16} strokeWidth={1.5} />
-                        <span>{post.comments}</span>
-                      </button>
-                      <button
-                        onClick={() => handleInteraction("bookmark")}
-                        className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                      >
-                        <Bookmark size={16} strokeWidth={1.5} />
-                        <span>Save</span>
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-              <button className="w-full mt-8 py-4 bg-neutral-900 border border-neutral-800 text-neutral-400 rounded-lg font-medium hover:bg-neutral-800 hover:border-neutral-700 hover:text-neutral-300 transition">
-                Load More Reviews
-              </button>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
       </main>
 
-      {/* Right Sidebar Component */}
       <RightSidebar
         trendingBooks={trendingBooks}
         loadingTrending={loadingTrending}

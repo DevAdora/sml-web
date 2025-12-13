@@ -23,13 +23,80 @@ export async function GET(request: Request) {
     );
 
     try {
-        const { data: posts, error: postsError } = await supabase
+        // Get pagination parameters from URL
+        const { searchParams } = new URL(request.url);
+        const page = parseInt(searchParams.get('page') || '1');
+        const limit = parseInt(searchParams.get('limit') || '10');
+        const unlimited = searchParams.get('unlimited') === 'true';
+
+        // First, get the total count of published posts
+        const { count: totalCount, error: countError } = await supabase
             .schema("sml")
             .from("posts")
-            .select("*")
-            .eq("status", "published")
-            .order("published_at", { ascending: false })
-            .limit(20);
+            .select("*", { count: 'exact', head: true })
+            .eq("status", "published");
+
+        if (countError) {
+            console.error("Count error:", countError);
+        }
+
+        const actualTotalPosts = totalCount || 0;
+        console.log(`Total posts in database: ${actualTotalPosts}`);
+
+        let posts;
+        let postsError;
+
+        if (unlimited && actualTotalPosts > 0) {
+            // UNLIMITED MODE: Cycle through posts indefinitely
+            // Calculate which "cycle" we're in and the offset within that cycle
+            const postsPerCycle = actualTotalPosts;
+            const cycleNumber = Math.floor(((page - 1) * limit) / postsPerCycle);
+            const offsetWithinCycle = ((page - 1) * limit) % postsPerCycle;
+
+            console.log(`Unlimited mode - Page: ${page}, Cycle: ${cycleNumber}, Offset: ${offsetWithinCycle}`);
+
+            // Fetch posts with cycling
+            const result = await supabase
+                .schema("sml")
+                .from("posts")
+                .select("*")
+                .eq("status", "published")
+                .order("published_at", { ascending: false })
+                .range(offsetWithinCycle, offsetWithinCycle + limit - 1);
+
+            posts = result.data;
+            postsError = result.error;
+
+            // If we don't have enough posts to fill the limit, wrap around
+            if (posts && posts.length < limit && actualTotalPosts > 0) {
+                const remaining = limit - posts.length;
+                const wrapResult = await supabase
+                    .schema("sml")
+                    .from("posts")
+                    .select("*")
+                    .eq("status", "published")
+                    .order("published_at", { ascending: false })
+                    .range(0, remaining - 1);
+
+                if (wrapResult.data) {
+                    posts = [...posts, ...wrapResult.data];
+                }
+            }
+        } else {
+            // NORMAL MODE: Standard pagination
+            const offset = (page - 1) * limit;
+
+            const result = await supabase
+                .schema("sml")
+                .from("posts")
+                .select("*")
+                .eq("status", "published")
+                .order("published_at", { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            posts = result.data;
+            postsError = result.error;
+        }
 
         if (postsError) {
             console.error("Fetch posts error:", postsError);
@@ -45,13 +112,16 @@ export async function GET(request: Request) {
                     success: true,
                     posts: [],
                     count: 0,
+                    hasMore: unlimited ? true : false, // In unlimited mode, always more
                 },
                 { status: 200 }
             );
         }
 
+        // Get unique author IDs
         const authorIds = [...new Set(posts.map(post => post.author_id))];
 
+        // Fetch author profiles
         const { data: profiles, error: profilesError } = await supabase
             .schema("sml")
             .from("profiles")
@@ -62,11 +132,13 @@ export async function GET(request: Request) {
             console.error("Fetch profiles error:", profilesError);
         }
 
+        // Create profile map for quick lookup
         const profileMap = new Map();
         (profiles || []).forEach(profile => {
             profileMap.set(profile.id, profile);
         });
 
+        // Combine posts with author information
         const postsWithAuthors = posts.map(post => {
             const authorProfile = profileMap.get(post.author_id);
             return {
@@ -75,11 +147,33 @@ export async function GET(request: Request) {
             };
         });
 
+        // Determine if there are more posts
+        let hasMore = unlimited ? true : false; // In unlimited mode, always true
+
+        if (!unlimited) {
+            // Check if there are more posts in normal mode
+            const offset = (page - 1) * limit;
+            const { data: nextPageCheck } = await supabase
+                .schema("sml")
+                .from("posts")
+                .select("id")
+                .eq("status", "published")
+                .order("published_at", { ascending: false })
+                .range(offset + limit, offset + limit);
+
+            hasMore = (nextPageCheck?.length ?? 0) > 0;
+        }
+
         return NextResponse.json(
             {
                 success: true,
                 posts: postsWithAuthors,
                 count: postsWithAuthors.length,
+                page: page,
+                limit: limit,
+                hasMore: hasMore,
+                unlimited: unlimited,
+                totalPostsInDB: actualTotalPosts,
             },
             { status: 200 }
         );
