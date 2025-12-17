@@ -2,9 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  BookOpen,
   MessageCircle,
-  Users,
   TrendingUp,
   Home,
   Bookmark,
@@ -14,24 +12,11 @@ import {
   Loader,
   LogOut,
   Settings,
+  Menu,
+  X,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-
-interface UserProfile {
-  id: string;
-  name: string;
-  username: string;
-  avatar: string;
-  email: string;
-}
-
-interface NavItem {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  badge?: number;
-  href: string; // Add href for routing
-}
+import { UserProfile, NavItem } from "@/app/types/types";
 
 interface LeftSidebarProps {
   onSignOut: () => void;
@@ -41,6 +26,7 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
   const [showUserMenu, setShowUserMenu] = useState<boolean>(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -125,6 +111,7 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
           username: username,
           avatar: avatar,
           email: data.email,
+          full_name: data.full_name,
         };
 
         setUser(userData);
@@ -139,6 +126,22 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
     fetchUserProfile();
   }, []);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [mobileMenuOpen]);
+
   const isActive = (href: string) => {
     if (href === "/dashboard") {
       return pathname === "/dashboard";
@@ -146,22 +149,25 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
     return pathname?.startsWith(href);
   };
 
-  return (
-    <aside className="fixed left-0 top-0 h-screen w-72 bg-neutral-900 border-r border-neutral-800 p-6 overflow-y-auto">
+  const handleNavClick = (href: string) => {
+    router.push(href);
+    setMobileMenuOpen(false);
+  };
+
+  const SidebarContent = () => (
+    <>
       <div className="mb-8">
-        {/* Logo */}
         <div className="flex items-center space-x-3 mb-8">
           <h1 className="text-xl font-serif text-neutral-300">
             Scriptum Mens Lumen
           </h1>
         </div>
 
-        {/* Navigation */}
         <nav className="space-y-2">
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => router.push(item.href)}
+              onClick={() => handleNavClick(item.href)}
               className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
                 isActive(item.href)
                   ? "bg-neutral-800 text-neutral-100"
@@ -180,9 +186,8 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
         </nav>
       </div>
 
-      {/* Write Review Button */}
       <button
-        onClick={() => router.push("/dashboard/posts")}
+        onClick={() => handleNavClick("/dashboard/posts")}
         className="w-full bg-neutral-800 hover:bg-neutral-700 text-neutral-100 px-6 py-3 rounded-lg font-medium transition flex items-center justify-center space-x-2 border border-neutral-700"
       >
         <PenTool size={18} strokeWidth={1.5} />
@@ -211,7 +216,6 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
               </div>
             </button>
 
-            {/* User Dropdown Menu */}
             {showUserMenu && (
               <div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-lg overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-neutral-700">
@@ -246,6 +250,76 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
           </div>
         )}
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <aside className="hidden lg:block fixed left-0 top-0 h-screen w-72 bg-neutral-900 border-r border-neutral-800 p-6 overflow-y-auto z-40">
+        <SidebarContent />
+      </aside>
+
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-neutral-900/95 backdrop-blur-md border-b border-neutral-800 z-50 flex items-center justify-between px-4">
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex items-center space-x-2 text-neutral-300 hover:text-neutral-100 transition"
+          aria-label="Open menu"
+        >
+          <Menu size={24} strokeWidth={1.5} />
+          <span className="font-medium">Menu</span>
+        </button>
+
+        <h1 className="text-sm font-serif text-neutral-400">
+          Scriptum Mens Lumen
+        </h1>
+      </header>
+
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] transition-opacity"
+          onClick={() => setMobileMenuOpen(false)}
+          style={{
+            animation: "fadeIn 0.3s ease-out",
+          }}
+        />
+      )}
+
+      <div
+        className={`lg:hidden h-full fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 rounded-t-3xl z-[70] transition-transform duration-300 ease-out ${
+          mobileMenuOpen ? "translate-y-0" : "translate-y-full"
+        }`}
+        style={{
+          height: "65vh",
+          maxHeight: "650px",
+        }}
+      >
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="w-12 h-1.5 bg-neutral-700 rounded-full" />
+        </div>
+
+        <button
+          onClick={() => setMobileMenuOpen(false)}
+          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-neutral-300 hover:bg-neutral-800 rounded-full transition"
+          aria-label="Close menu"
+        >
+          <X size={20} strokeWidth={1.5} />
+        </button>
+
+        <div className="h-full overflow-y-auto px-6 pb-6">
+          <SidebarContent />
+        </div>
+      </div>
+
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </>
   );
 }
