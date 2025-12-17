@@ -1,11 +1,12 @@
-interface TrendingBook {
+export interface TrendingBook {
   title: string;
   author: string;
   category: string;
   discussions: number;
+  link?: string;
 }
 
-interface FeedPost {
+export interface FeedPost {
   id: number;
   title: string;
   author: string;
@@ -18,20 +19,21 @@ interface FeedPost {
   timestamp: string;
 }
 
-interface TrendingTopic {
+export interface TrendingTopic {
   tag: string;
   posts: string;
   growth: string;
 }
 
-interface SuggestedWriter {
+export interface SuggestedWriter {
   name: string;
   handle: string;
   followers: string;
   bio: string;
 }
 
-interface UserProfile {
+export interface UserProfile {
+  id: string;
   name: string;
   username: string;
   avatar: string;
@@ -39,9 +41,11 @@ interface UserProfile {
   full_name: string;
 }
 
-interface NavItem {
+export interface NavItem {
   id: string;
   label: string;
   icon: React.ReactNode;
   badge?: number;
+  href: string;
+
 }

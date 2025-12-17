@@ -227,134 +227,61 @@ export default function SMLDashboard() {
     return externalPosts;
   };
 
-  // Fetch more posts function with UNLIMITED scrolling
-  const fetchMorePosts = async (pageNum: number) => {
-    // Prevent duplicate fetches
-    if (loadedPagesRef.current.has(pageNum) || isLoadingMore) {
-      console.log(`Page ${pageNum} already loaded or currently loading`);
-      return;
-    }
-
-    loadedPagesRef.current.add(pageNum);
-    setIsLoadingMore(true);
-    console.log(`Fetching page ${pageNum}...`);
-
+  // Fetch internal posts from Supabase
+  const fetchInternalPosts = async (pageNum: number) => {
     try {
-      const newPosts: FeedPost[] = [];
-
-      // Fetch local posts with pagination (API will cycle data automatically)
-      try {
-        const localResponse = await fetch(
-          `/api/posts?page=${pageNum}&limit=10&unlimited=true`,
-          {
-            method: "GET",
-            credentials: "include",
-          }
-        );
-
-        if (localResponse.ok) {
-          const localData = await localResponse.json();
-          console.log(`Local API response for page ${pageNum}:`, localData);
-
-          if (localData.posts && localData.posts.length > 0) {
-            const transformedPosts: FeedPost[] = localData.posts.map(
-              (post: any, index: number) => {
-                const authorName = post.author_name || "Anonymous";
-                const avatar =
-                  authorName === "Anonymous"
-                    ? "AN"
-                    : generateAvatar(authorName);
-
-                // Create unique IDs for recycled posts by adding page and index
-                const uniqueId = `local-${post.id}-p${pageNum}-${index}`;
-
-                return {
-                  id: uniqueId,
-                  title: post.title,
-                  author: authorName,
-                  author_id: post.author_id,
-                  avatar: avatar,
-                  genre: post.genre,
-                  likes: post.likes_count || 0,
-                  comments: post.comments_count || 0,
-                  readTime: `${post.read_time} min`,
-                  excerpt: post.excerpt,
-                  timestamp: getRelativeTime(post.created_at),
-                  likes_count: post.likes_count || 0,
-                  comments_count: post.comments_count || 0,
-                  read_time: post.read_time,
-                  created_at: post.created_at,
-                  isExternal: false,
-                };
-              }
-            );
-
-            newPosts.push(...transformedPosts);
-            console.log(`Added ${transformedPosts.length} local posts`);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching local posts:", error);
+      const response = await fetch(
+        `/api/posts?page=${pageNum}&limit=10&include_external=false`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch internal posts");
       }
-
-      // Fetch external APIs only on first page and only once
-      if (pageNum === 1 && !fetchedExternalAPIs) {
-        console.log("Fetching external APIs...");
-        const externalPosts = await fetchExternalAPIs();
-
-        // Add unique identifiers to external posts
-        const uniqueExternalPosts = externalPosts.map((post, index) => ({
-          ...post,
-          id: `${post.id}-p1-${index}`,
-        }));
-
-        newPosts.push(...uniqueExternalPosts);
-        console.log(`Added ${uniqueExternalPosts.length} external posts`);
-        setFetchedExternalAPIs(true);
-      }
-
-      // For subsequent pages, cycle external API data every 3 pages
-      if (pageNum > 1 && pageNum % 3 === 0) {
-        console.log("Adding recycled external API posts...");
-        const recycledExternalPosts = await fetchExternalAPIs();
-
-        // Add unique identifiers for recycled external posts
-        const uniqueRecycledPosts = recycledExternalPosts.map(
-          (post, index) => ({
-            ...post,
-            id: `${post.id}-p${pageNum}-${index}`,
-          })
-        );
-
-        newPosts.push(...uniqueRecycledPosts);
-        console.log(
-          `Added ${uniqueRecycledPosts.length} recycled external posts`
-        );
-      }
-
-      // Sort by date
-      newPosts.sort((a, b) => {
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      });
-
-      console.log(`Total new posts to add: ${newPosts.length}`);
-
-      if (newPosts.length > 0) {
-        setFeedPosts((prev) => {
-          const combined = [...prev, ...newPosts];
-          console.log(`Total posts after update: ${combined.length}`);
-          return combined;
-        });
-      }
+      const data = await response.json();
+      return data.posts || [];
     } catch (error) {
-      console.error("Error fetching more posts:", error);
-      loadedPagesRef.current.delete(pageNum); // Remove from loaded if error
-    } finally {
-      setIsLoadingMore(false);
+      console.error("Error fetching internal posts:", error);
+      return [];
     }
   };
+
+  // Fetch trending books from NY Times
+  useEffect(() => {
+    const fetchTrendingBooks = async () => {
+      setLoadingTrending(true);
+      try {
+        const response = await fetch(
+          "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=DEMO_KEY"
+        );
+        const data = await response.json();
+
+        if (data.results && data.results.lists) {
+          const books: TrendingBook[] = [];
+          data.results.lists.slice(0, 3).forEach((list: any) => {
+            list.books.slice(0, 2).forEach((book: any) => {
+              books.push({
+                title: book.title,
+                author: book.author,
+                category: list.list_name,
+                discussions: Math.floor(Math.random() * 200) + 50,
+                link:
+                  book.amazon_product_url ||
+                  (book.buy_links && book.buy_links[0]
+                    ? book.buy_links[0].url
+                    : undefined),
+              });
+            });
+          });
+          setTrendingBooks(books.slice(0, 5));
+        }
+      } catch (error) {
+        console.error("Error fetching trending books:", error);
+      } finally {
+        setLoadingTrending(false);
+      }
+    };
+
+    fetchTrendingBooks();
+  }, []);
 
   // Fetch user profile
   useEffect(() => {
@@ -372,28 +299,32 @@ export default function SMLDashboard() {
 
         const data = await response.json();
 
-        if (data.authenticated) {
-          const username = data.username || data.email.split("@")[0];
-          let avatar = "";
-          if (data.full_name) {
-            const nameParts = data.full_name.split(" ");
-            avatar =
-              nameParts.length > 1
-                ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
-                : data.full_name.substring(0, 2).toUpperCase();
-          } else {
-            avatar = data.email.substring(0, 2).toUpperCase();
-          }
-
-          const userData: UserProfile = {
-            name: data.full_name || data.email.split("@")[0],
-            username: username,
-            avatar: avatar,
-            email: data.email,
-          };
-
-          setUser(userData);
+        if (!data.authenticated) {
+          setUser(null);
+          setLoadingUser(false);
+          return;
         }
+
+        const username = data.username || data.email.split("@")[0];
+        let avatar = "";
+        if (data.full_name) {
+          const nameParts = data.full_name.split(" ");
+          avatar =
+            nameParts.length > 1
+              ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
+              : data.full_name.substring(0, 2).toUpperCase();
+        } else {
+          avatar = data.email.substring(0, 2).toUpperCase();
+        }
+
+        const userData: UserProfile = {
+          name: data.full_name || data.email,
+          username: username,
+          avatar: avatar,
+          email: data.email,
+        };
+
+        setUser(userData);
       } catch (error) {
         console.error("Error fetching user profile:", error);
         setUser(null);
@@ -405,104 +336,71 @@ export default function SMLDashboard() {
     fetchUserProfile();
   }, []);
 
-  // Fetch trending books
-  useEffect(() => {
-    const fetchTrendingBooks = async () => {
-      setLoadingTrending(true);
-      try {
-        const categories = [
-          "fiction",
-          "mystery",
-          "science fiction",
-          "fantasy",
-          "literary fiction",
-        ];
-        const randomCategory =
-          categories[Math.floor(Math.random() * categories.length)];
-
-        const response = await fetch(
-          `https://www.googleapis.com/books/v1/volumes?q=subject:${randomCategory}&orderBy=newest&maxResults=6&langRestrict=en`
-        );
-
-        const data = await response.json();
-
-        if (data.items) {
-          const books: TrendingBook[] = data.items.map(
-            (item: {
-              volumeInfo: {
-                title: string;
-                authors?: string[];
-                categories?: string[];
-                infoLink?: string;
-                previewLink?: string;
-              };
-            }) => ({
-              title: item.volumeInfo.title,
-              author: item.volumeInfo.authors
-                ? item.volumeInfo.authors[0]
-                : "Unknown Author",
-              category: item.volumeInfo.categories
-                ? item.volumeInfo.categories[0]
-                : randomCategory,
-              discussions: Math.floor(Math.random() * 500) + 50,
-              link: item.volumeInfo.infoLink || item.volumeInfo.previewLink,
-            })
-          );
-          setTrendingBooks(books);
-        }
-      } catch (error) {
-        console.error("Error fetching trending books:", error);
-        setTrendingBooks([
-          {
-            title: "The Midnight Library",
-            author: "Matt Haig",
-            category: "Fiction",
-            discussions: 342,
-          },
-          {
-            title: "Project Hail Mary",
-            author: "Andy Weir",
-            category: "Science Fiction",
-            discussions: 289,
-          },
-          {
-            title: "Klara and the Sun",
-            author: "Kazuo Ishiguro",
-            category: "Literary Fiction",
-            discussions: 215,
-          },
-        ]);
-      } finally {
-        setLoadingTrending(false);
-      }
-    };
-
-    fetchTrendingBooks();
-  }, []);
-
-  // Initial posts load
+  // Initial load: fetch external APIs first, then internal posts
   useEffect(() => {
     const loadInitialPosts = async () => {
-      console.log("Loading initial posts...");
       setLoadingPosts(true);
-      await fetchMorePosts(1);
+
+      // Fetch external APIs first
+      const externalPosts = await fetchExternalAPIs();
+      setFetchedExternalAPIs(true);
+
+      // Fetch internal posts (page 1)
+      const internalPosts = await fetchInternalPosts(1);
+      loadedPagesRef.current.add(1);
+
+      // Merge and sort by date
+      const allPosts = [...externalPosts, ...internalPosts].sort((a, b) => {
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+
+      setFeedPosts(allPosts);
       setLoadingPosts(false);
     };
 
     loadInitialPosts();
-  }, []); // Empty dependency array - only run once
+  }, []);
 
-  // Intersection Observer for infinite scroll (UNLIMITED)
+  // Fetch more internal posts
+  const fetchMorePosts = useCallback(
+    async (pageNum: number) => {
+      if (loadedPagesRef.current.has(pageNum) || isLoadingMore) {
+        return;
+      }
+
+      setIsLoadingMore(true);
+      loadedPagesRef.current.add(pageNum);
+
+      const newPosts = await fetchInternalPosts(pageNum);
+
+      if (newPosts.length > 0) {
+        setFeedPosts((prevPosts) => {
+          const merged = [...prevPosts, ...newPosts];
+          return merged.sort((a, b) => {
+            return (
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+            );
+          });
+        });
+      }
+
+      setIsLoadingMore(false);
+    },
+    [isLoadingMore]
+  );
+
+  // Intersection Observer for infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        // Always load more when scrolled to bottom (no hasMore check)
         if (entries[0].isIntersecting && !isLoadingMore && !loadingPosts) {
-          console.log("Intersection detected, loading more...");
-          setPage((prev) => prev + 1);
+          setPage((prevPage) => prevPage + 1);
         }
       },
-      { threshold: 0.1, rootMargin: "100px" }
+      { threshold: 0.1 }
     );
 
     const currentTarget = observerTarget.current;
@@ -515,12 +413,11 @@ export default function SMLDashboard() {
         observer.unobserve(currentTarget);
       }
     };
-  }, [isLoadingMore, loadingPosts]); // Removed hasMore dependency
+  }, [isLoadingMore, loadingPosts]);
 
-  // Load more when page changes
+  // Trigger fetch when page changes
   useEffect(() => {
-    if (page > 1 && !loadedPagesRef.current.has(page)) {
-      console.log(`Page changed to ${page}, fetching more posts...`);
+    if (page > 1 && !loadingPosts) {
       fetchMorePosts(page);
     }
   }, [page]);
@@ -566,29 +463,31 @@ export default function SMLDashboard() {
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      <main className="ml-72 mr-96 min-h-screen">
-        <div className="max-w-3xl mx-auto px-8 py-8">
-          <div className="mb-8">
+      {/* Responsive main content */}
+      <main className="pt-16 lg:pt-0 lg:ml-72 lg:mr-96 min-h-screen">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+          {/* Search Bar */}
+          <div className="mb-6 lg:mb-8">
             <div className="relative">
               <Search
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-500"
-                size={20}
+                className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-neutral-500"
+                size={18}
                 strokeWidth={1.5}
               />
               <input
                 type="text"
                 placeholder="Search books, reviews, authors..."
-                className="w-full pl-12 pr-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-neutral-700 focus:border-neutral-700 text-neutral-200 placeholder-neutral-500"
+                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 bg-neutral-900 border border-neutral-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-neutral-700 focus:border-neutral-700 text-neutral-200 placeholder-neutral-500 text-sm sm:text-base"
               />
             </div>
           </div>
 
           {/* Welcome Section */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 mb-8">
-            <h2 className="text-xl font-serif text-neutral-200 mb-2">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 sm:p-6 mb-6 lg:mb-8">
+            <h2 className="text-lg sm:text-xl font-serif text-neutral-200 mb-1 sm:mb-2">
               Welcome back, {user ? user.name : "Reader"}
             </h2>
-            <p className="text-neutral-500 text-sm">
+            <p className="text-neutral-500 text-xs sm:text-sm">
               {feedPosts.length} posts in your feed
             </p>
           </div>
@@ -605,7 +504,7 @@ export default function SMLDashboard() {
           ) : (
             <>
               {/* Feed Posts */}
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {feedPosts.length === 0 ? (
                   <div className="text-center py-12">
                     <BookOpen
@@ -624,21 +523,24 @@ export default function SMLDashboard() {
                   feedPosts.map((post) => (
                     <article
                       key={post.id}
-                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer"
+                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 sm:p-6 hover:border-neutral-700 transition cursor-pointer"
                       onClick={() => post.isExternal && handlePostClick(post)}
                     >
-                      <div className="flex items-center space-x-3 mb-4">
-                        <div className="w-9 h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium">
+                      {/* Post Header */}
+                      <div className="flex items-start space-x-3 mb-3 sm:mb-4">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
                           {post.avatar}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-neutral-300 text-sm truncate">
                             {post.author}
                           </p>
-                          <div className="flex items-center space-x-2 text-xs text-neutral-600">
-                            <span>{post.timestamp}</span>
-                            <span>·</span>
-                            <span className="flex items-center">
+                          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
+                            <span className="whitespace-nowrap">
+                              {post.timestamp}
+                            </span>
+                            <span className="hidden sm:inline">·</span>
+                            <span className="flex items-center whitespace-nowrap">
                               <Clock
                                 size={11}
                                 className="mr-1"
@@ -648,58 +550,60 @@ export default function SMLDashboard() {
                             </span>
                             {post.source && (
                               <>
-                                <span>·</span>
-                                <span className="text-neutral-500">
+                                <span className="hidden sm:inline">·</span>
+                                <span className="text-neutral-500 whitespace-nowrap">
                                   {post.source}
                                 </span>
                               </>
                             )}
                           </div>
                         </div>
-                        <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap">
+                        <span className="px-2 sm:px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap flex-shrink-0">
                           {post.genre}
                         </span>
                       </div>
 
+                      {/* Post Content */}
                       <div className={post.isExternal ? "cursor-pointer" : ""}>
-                        <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words flex items-start">
-                          {post.title}
+                        <h3 className="text-base sm:text-xl font-serif text-neutral-100 mb-2 sm:mb-3 hover:text-neutral-300 transition break-words flex items-start leading-snug">
+                          <span className="flex-1">{post.title}</span>
                           {post.isExternal && post.link && (
                             <ExternalLink
-                              size={16}
+                              size={14}
                               className="ml-2 text-neutral-600 flex-shrink-0 mt-1"
                             />
                           )}
                         </h3>
-                        <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
+                        <p className="text-neutral-400 text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed break-words line-clamp-3">
                           {post.excerpt}
                         </p>
                       </div>
 
+                      {/* Post Actions */}
                       <div
-                        className="flex items-center space-x-6 text-sm text-neutral-500"
+                        className="flex items-center space-x-4 sm:space-x-6 text-xs sm:text-sm text-neutral-500"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
                           onClick={() => handleInteraction("like posts")}
-                          className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                          className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
                         >
-                          <Star size={16} strokeWidth={1.5} />
+                          <Star size={14} strokeWidth={1.5} />
                           <span>{post.likes}</span>
                         </button>
                         <button
                           onClick={() => handleInteraction("comment")}
-                          className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                          className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
                         >
-                          <MessageCircle size={16} strokeWidth={1.5} />
+                          <MessageCircle size={14} strokeWidth={1.5} />
                           <span>{post.comments}</span>
                         </button>
                         <button
                           onClick={() => handleInteraction("bookmark")}
-                          className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                          className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
                         >
-                          <Bookmark size={16} strokeWidth={1.5} />
-                          <span>Save</span>
+                          <Bookmark size={14} strokeWidth={1.5} />
+                          <span className="hidden sm:inline">Save</span>
                         </button>
                       </div>
                     </article>
@@ -707,16 +611,16 @@ export default function SMLDashboard() {
                 )}
               </div>
 
-              {/* Infinite Scroll Trigger & Loading Indicator (ALWAYS ACTIVE) */}
+              {/* Infinite Scroll Trigger & Loading Indicator */}
               {feedPosts.length > 0 && (
-                <div ref={observerTarget} className="py-8">
+                <div ref={observerTarget} className="py-6 sm:py-8">
                   {isLoadingMore && (
                     <div className="flex flex-col items-center justify-center">
                       <Loader
                         className="animate-spin text-neutral-600 mb-2"
-                        size={32}
+                        size={28}
                       />
-                      <p className="text-neutral-500 text-sm">
+                      <p className="text-neutral-500 text-xs sm:text-sm">
                         Loading more posts...
                       </p>
                     </div>
