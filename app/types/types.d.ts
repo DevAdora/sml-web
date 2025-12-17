@@ -7,9 +7,10 @@ export interface TrendingBook {
 }
 
 export interface FeedPost {
-  id: number;
+  id: string;
   title: string;
   author: string;
+  author_id: string;
   avatar: string;
   genre: string;
   likes: number;
@@ -17,6 +18,13 @@ export interface FeedPost {
   readTime: string;
   excerpt: string;
   timestamp: string;
+  link?: string;
+  source?: string;
+  likes_count: number;
+  comments_count: number;
+  read_time: number;
+  created_at: string;
+  isExternal?: boolean;
 }
 
 export interface TrendingTopic {

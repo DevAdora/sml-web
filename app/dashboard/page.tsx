@@ -4,10 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BookOpen,
   MessageCircle,
-  Users,
   Search,
-  Bell,
-  Hash,
   Clock,
   Star,
   Bookmark,
@@ -16,56 +13,13 @@ import {
 } from "lucide-react";
 import LeftSidebar from "@/app/components/Sidebar";
 import { RightSidebar } from "../components/TrendingBar";
-
-// ==================== TYPES ====================
-interface TrendingBook {
-  title: string;
-  author: string;
-  category: string;
-  discussions: number;
-  link?: string;
-}
-
-interface FeedPost {
-  id: string;
-  title: string;
-  author: string;
-  author_id: string;
-  avatar: string;
-  genre: string;
-  likes: number;
-  comments: number;
-  readTime: string;
-  excerpt: string;
-  timestamp: string;
-  link?: string;
-  source?: string;
-  likes_count: number;
-  comments_count: number;
-  read_time: number;
-  created_at: string;
-  isExternal?: boolean;
-}
-
-interface TrendingTopic {
-  tag: string;
-  posts: string;
-  growth: string;
-}
-
-interface SuggestedWriter {
-  name: string;
-  handle: string;
-  followers: string;
-  bio: string;
-}
-
-interface UserProfile {
-  name: string;
-  username: string;
-  avatar: string;
-  email: string;
-}
+import {
+  TrendingBook,
+  FeedPost,
+  TrendingTopic,
+  SuggestedWriter,
+  UserProfile,
+} from "../types/types";
 
 export default function SMLDashboard() {
   const [trendingBooks, setTrendingBooks] = useState<TrendingBook[]>([]);
@@ -322,6 +276,8 @@ export default function SMLDashboard() {
           username: username,
           avatar: avatar,
           email: data.email,
+          id: data.id,
+          full_name: data.full_name,
         };
 
         setUser(userData);
