@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,6 +31,11 @@ export default function RootLayout({
         <div className="min-h-screen bg-neutral-950">
           <main className="pt-16 lg:pt-0 min-h-screen">{children}</main>
         </div>
+        <Script
+          src="https://web-analytics-tan.vercel.app/api/track.js"
+          data-site-id="sml"
+          async
+        ></Script>
       </body>
     </html>
   );
