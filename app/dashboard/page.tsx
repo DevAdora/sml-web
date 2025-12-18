@@ -98,7 +98,6 @@ export default function SMLDashboard() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Fetch interaction status - same as post detail page
   const fetchPostInteractionStatus = async (postId: string) => {
     try {
       const response = await fetch(`/api/posts/${postId}`, {
@@ -106,6 +105,11 @@ export default function SMLDashboard() {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log(`Fetched interaction for ${postId}:`, {
+          liked: data.user_liked,
+          bookmarked: data.user_bookmarked,
+          likeCount: data.likes_count,
+        });
         return {
           liked: data.user_liked || false,
           bookmarked: data.user_bookmarked || false,
@@ -118,7 +122,6 @@ export default function SMLDashboard() {
     return null;
   };
 
-  // Handle like - same logic as post detail page
   const handleLike = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -126,7 +129,10 @@ export default function SMLDashboard() {
     const currentState = postInteractions[postId];
     const newLiked = !currentState?.liked;
 
-    // Optimistic update
+    console.log(
+      `Like clicked for ${postId}. Current: ${currentState?.liked}, New: ${newLiked}`
+    );
+
     setPostInteractions((prev) => ({
       ...prev,
       [postId]: {
@@ -145,15 +151,18 @@ export default function SMLDashboard() {
       });
 
       if (!response.ok) {
-        // Revert on error
+        console.error("Like API failed");
         setPostInteractions((prev) => ({
           ...prev,
           [postId]: currentState,
         }));
       } else {
-        // Refetch to get accurate state
+        console.log("Like API success, refetching status...");
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         const updatedStatus = await fetchPostInteractionStatus(postId);
         if (updatedStatus) {
+          console.log(`Updated status for ${postId}:`, updatedStatus);
           setPostInteractions((prev) => ({
             ...prev,
             [postId]: updatedStatus,
@@ -162,7 +171,6 @@ export default function SMLDashboard() {
       }
     } catch (error) {
       console.error("Error toggling like:", error);
-      // Revert on error
       setPostInteractions((prev) => ({
         ...prev,
         [postId]: currentState,
@@ -170,7 +178,6 @@ export default function SMLDashboard() {
     }
   };
 
-  // Handle bookmark - same logic as post detail page
   const handleBookmark = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -178,11 +185,17 @@ export default function SMLDashboard() {
     const currentState = postInteractions[postId];
     const newBookmarked = !currentState?.bookmarked;
 
-    // Optimistic update
+    console.log(
+      `Bookmark clicked for ${postId}. Current state:`,
+      currentState,
+      `New bookmarked: ${newBookmarked}`
+    );
+
     setPostInteractions((prev) => ({
       ...prev,
       [postId]: {
-        ...prev[postId],
+        liked: prev[postId]?.liked || false,
+        likeCount: prev[postId]?.likeCount || 0,
         bookmarked: newBookmarked,
       },
     }));
@@ -193,16 +206,25 @@ export default function SMLDashboard() {
         credentials: "include",
       });
 
+      const responseData = await response.json();
+      console.log("Bookmark API response:", responseData);
+
       if (!response.ok) {
-        // Revert on error
+        console.error("Bookmark API failed");
         setPostInteractions((prev) => ({
           ...prev,
           [postId]: currentState,
         }));
       } else {
-        // Refetch to get accurate state
+        console.log("Bookmark API success, refetching status...");
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         const updatedStatus = await fetchPostInteractionStatus(postId);
         if (updatedStatus) {
+          console.log(
+            `Updated status after bookmark for ${postId}:`,
+            updatedStatus
+          );
           setPostInteractions((prev) => ({
             ...prev,
             [postId]: updatedStatus,
@@ -211,7 +233,6 @@ export default function SMLDashboard() {
       }
     } catch (error) {
       console.error("Error toggling bookmark:", error);
-      // Revert on error
       setPostInteractions((prev) => ({
         ...prev,
         [postId]: currentState,
@@ -336,7 +357,10 @@ export default function SMLDashboard() {
           cover_image_caption: post.cover_image_caption || null,
         }));
 
-        // Fetch interactions for all posts (matching post detail logic)
+        console.log(
+          `Fetching interactions for ${internalPosts.length} posts...`
+        );
+
         const interactions: typeof postInteractions = {};
         await Promise.all(
           internalPosts.map(async (post) => {
@@ -345,6 +369,11 @@ export default function SMLDashboard() {
               interactions[post.id] = status;
             }
           })
+        );
+
+        console.log(
+          "Fetched interactions:",
+          JSON.stringify(interactions, null, 2)
         );
         setPostInteractions((prev) => ({ ...prev, ...interactions }));
 
@@ -730,9 +759,14 @@ export default function SMLDashboard() {
                                 onClick={(e) => handleBookmark(post.id, e)}
                                 className={`flex items-center space-x-2 transition ${
                                   postInteractions[post.id]?.bookmarked
-                                    ? "text-yellow-500"
-                                    : "hover:text-yellow-400"
+                                    ? "text-amber-500"
+                                    : "hover:text-neutral-300"
                                 }`}
+                                title={
+                                  postInteractions[post.id]?.bookmarked
+                                    ? "Remove bookmark"
+                                    : "Save post"
+                                }
                               >
                                 <Bookmark
                                   size={16}
@@ -743,7 +777,11 @@ export default function SMLDashboard() {
                                       : "none"
                                   }
                                 />
-                                <span>Save</span>
+                                <span>
+                                  {postInteractions[post.id]?.bookmarked
+                                    ? "Saved"
+                                    : "Save"}
+                                </span>
                               </button>
                             </div>
                           </div>

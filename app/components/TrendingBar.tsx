@@ -178,7 +178,7 @@ export function RightSidebar({
 
       <button
         onClick={() => setMobileMenuOpen(true)}
-        className="lg:hidden fixed top-4 right-4 z-50 flex items-center space-x-2 px-4 py-2 bg-neutral-800/95 backdrop-blur-md hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded-full shadow-lg transition-all active:scale-95"
+        className="lg:hidden fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-4 py-2 bg-neutral-800/95 backdrop-blur-md hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded-full shadow-lg transition-all active:scale-95"
         aria-label="Open trending menu"
       >
         <TrendingUp size={20} strokeWidth={1.5} />
