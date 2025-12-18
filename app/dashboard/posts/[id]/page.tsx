@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Image from "next/image";
 import {
   ChevronLeft,
   Clock,
@@ -31,6 +32,8 @@ interface PostData {
   user_liked: boolean;
   user_bookmarked: boolean;
   tags: string[];
+  cover_image_url?: string | null;
+  cover_image_caption?: string | null;
 }
 
 export default function PostDetailPage() {
@@ -243,10 +246,8 @@ export default function PostDetailPage() {
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* Main Content */}
       <main className="pt-16 lg:pt-0 lg:ml-72 lg:mr-96 min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
-          {/* Back Button */}
           <button
             onClick={() => router.back()}
             className="flex items-center space-x-2 text-neutral-400 hover:text-neutral-300 transition mb-6 sm:mb-8"
@@ -255,23 +256,18 @@ export default function PostDetailPage() {
             <span className="text-sm">Back to feed</span>
           </button>
 
-          {/* Article */}
           <article className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
-            {/* Header */}
             <header className="border-b border-neutral-800 p-6 sm:p-8 lg:p-12">
-              {/* Genre Badge */}
               <div className="mb-4">
                 <span className="inline-block px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium">
                   {post.genre}
                 </span>
               </div>
 
-              {/* Title */}
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif text-neutral-100 mb-6 leading-tight">
                 {post.title}
               </h1>
 
-              {/* Author Info */}
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center space-x-4">
                   <div className="w-12 h-12 sm:w-14 sm:h-14 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 font-medium text-sm">
@@ -292,7 +288,6 @@ export default function PostDetailPage() {
                   </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={handleLike}
@@ -335,7 +330,28 @@ export default function PostDetailPage() {
               </div>
             </header>
 
-            {/* Content */}
+            {/* Cover Image Section - Similar to Medium/Substack */}
+            {post.cover_image_url && (
+              <div className="relative w-full">
+                <div className="relative w-full h-64 sm:h-96 lg:h-[500px]">
+                  <Image
+                    src={post.cover_image_url}
+                    alt={post.cover_image_caption || post.title}
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                </div>
+                {post.cover_image_caption && (
+                  <div className="px-6 sm:px-8 lg:px-12 py-3 bg-neutral-800/50 border-b border-neutral-800">
+                    <p className="text-xs sm:text-sm text-neutral-400 text-center italic">
+                      {post.cover_image_caption}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="p-6 sm:p-8 lg:p-12">
               <div className="prose prose-invert prose-neutral max-w-none">
                 <div className="text-neutral-300 text-base sm:text-lg leading-relaxed font-serif">
@@ -343,7 +359,6 @@ export default function PostDetailPage() {
                 </div>
               </div>
 
-              {/* Tags */}
               {post.tags && post.tags.length > 0 && (
                 <div className="mt-8 pt-8 border-t border-neutral-800">
                   <div className="flex flex-wrap gap-2">
@@ -360,7 +375,6 @@ export default function PostDetailPage() {
               )}
             </div>
 
-            {/* Footer Actions */}
             <footer className="border-t border-neutral-800 p-6 sm:p-8 bg-neutral-800/30">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-6 text-neutral-400">
@@ -391,7 +405,6 @@ export default function PostDetailPage() {
             </footer>
           </article>
 
-          {/* Comments Section (Future) */}
           <div className="mt-8 bg-neutral-900 border border-neutral-800 rounded-2xl p-6 sm:p-8">
             <h3 className="text-xl font-serif text-neutral-200 mb-6">
               Comments ({post.comments_count})

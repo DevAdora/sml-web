@@ -572,97 +572,99 @@ export default function SMLDashboard() {
                       </div>
                     </article>
                   ) : (
-                    <Link key={post.id} href={`/dashboard/posts/${post.id}`}>
-                      <article className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all cursor-pointer">
-                        {post.cover_image_url && (
-                          <div className="relative w-full h-48 sm:h-64">
-                            <Image
-                              src={post.cover_image_url}
-                              alt={post.cover_image_caption || post.title}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        )}
+                    <div key={post.id}>
+                      <Link href={`/dashboard/posts/${post.id}`}>
+                        <article className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all cursor-pointer">
+                          {post.cover_image_url && (
+                            <div className="relative w-full h-48 sm:h-64">
+                              <Image
+                                src={post.cover_image_url}
+                                alt={post.cover_image_caption || post.title}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                          )}
 
-                        <div className="p-6">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-start space-x-3 flex-1 min-w-0">
-                              <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
-                                {post.avatar}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-neutral-300 text-sm truncate">
-                                  {post.author}
-                                </p>
-                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
-                                  <span className="whitespace-nowrap">
-                                    {post.timestamp}
-                                  </span>
-                                  <span>·</span>
-                                  <span className="flex items-center whitespace-nowrap">
-                                    <Clock
-                                      size={12}
-                                      className="mr-1"
-                                      strokeWidth={1.5}
-                                    />
-                                    {post.readTime}
-                                  </span>
+                          <div className="p-6">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-start space-x-3 flex-1 min-w-0">
+                                <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
+                                  {post.avatar}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-neutral-300 text-sm truncate">
+                                    {post.author}
+                                  </p>
+                                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
+                                    <span className="whitespace-nowrap">
+                                      {post.timestamp}
+                                    </span>
+                                    <span>·</span>
+                                    <span className="flex items-center whitespace-nowrap">
+                                      <Clock
+                                        size={12}
+                                        className="mr-1"
+                                        strokeWidth={1.5}
+                                      />
+                                      {post.readTime}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
+                              <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-3">
+                                {post.genre}
+                              </span>
                             </div>
-                            <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-3">
-                              {post.genre}
-                            </span>
-                          </div>
 
-                          <div>
-                            <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words leading-snug">
-                              {post.title}
-                            </h3>
-                            <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
-                              {post.excerpt}
-                            </p>
-                          </div>
+                            <div>
+                              <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words leading-snug">
+                                {post.title}
+                              </h3>
+                              <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
+                                {post.excerpt}
+                              </p>
+                            </div>
 
-                          <div
-                            className="flex items-center space-x-6 text-sm text-neutral-500"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleInteraction("like posts");
-                              }}
-                              className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                            <div
+                              className="flex items-center space-x-6 text-sm text-neutral-500"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              <Star size={16} strokeWidth={1.5} />
-                              <span>{post.likes}</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleInteraction("comment");
-                              }}
-                              className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                            >
-                              <MessageCircle size={16} strokeWidth={1.5} />
-                              <span>{post.comments}</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleInteraction("bookmark");
-                              }}
-                              className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                            >
-                              <Bookmark size={16} strokeWidth={1.5} />
-                              <span>Save</span>
-                            </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleInteraction("like posts");
+                                }}
+                                className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                              >
+                                <Star size={16} strokeWidth={1.5} />
+                                <span>{post.likes}</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleInteraction("comment");
+                                }}
+                                className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                              >
+                                <MessageCircle size={16} strokeWidth={1.5} />
+                                <span>{post.comments}</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleInteraction("bookmark");
+                                }}
+                                className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                              >
+                                <Bookmark size={16} strokeWidth={1.5} />
+                                <span>Save</span>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      </article>
-                    </Link>
+                        </article>
+                      </Link>
+                    </div>
                   )
                 )}
               </div>
