@@ -5,7 +5,7 @@ import {
   BookOpen,
   MessageCircle,
   Clock,
-  Star,
+  Heart,
   Bookmark,
   Loader,
   ExternalLink,
@@ -14,60 +14,17 @@ import Link from "next/link";
 import Image from "next/image";
 import LeftSidebar from "@/app/components/Sidebar";
 import { RightSidebar } from "../components/TrendingBar";
-
-// ==================== TYPES ====================
-interface TrendingBook {
-  title: string;
-  author: string;
-  category: string;
-  discussions: number;
-  link?: string;
-}
-
-interface FeedPost {
-  id: string;
-  title: string;
-  author: string;
-  author_id: string;
-  avatar: string;
-  genre: string;
-  likes: number;
-  comments: number;
-  readTime: string;
-  excerpt: string;
-  timestamp: string;
-  link?: string;
-  source?: string;
-  likes_count: number;
-  comments_count: number;
-  read_time: number;
-  created_at: string;
-  isExternal?: boolean;
-  cover_image_url?: string | null;
-  cover_image_caption?: string | null;
-}
-
-interface TrendingTopic {
-  tag: string;
-  posts: string;
-  growth: string;
-}
-
-interface SuggestedWriter {
-  name: string;
-  handle: string;
-  followers: string;
-  bio: string;
-}
-
-interface UserProfile {
-  name: string;
-  username: string;
-  avatar: string;
-  email: string;
-}
+import { useRouter } from "next/navigation";
+import {
+  TrendingBook,
+  FeedPost,
+  TrendingTopic,
+  SuggestedWriter,
+  UserProfile,
+} from "../types/types";
 
 export default function SMLDashboard() {
+  const router = useRouter();
   const [trendingBooks, setTrendingBooks] = useState<TrendingBook[]>([]);
   const [loadingTrending, setLoadingTrending] = useState<boolean>(true);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -77,6 +34,14 @@ export default function SMLDashboard() {
   const [page, setPage] = useState<number>(1);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [hasMore, setHasMore] = useState<boolean>(true);
+
+  const [postInteractions, setPostInteractions] = useState<{
+    [postId: string]: {
+      liked: boolean;
+      bookmarked: boolean;
+      likeCount: number;
+    };
+  }>({});
 
   const observerTarget = useRef<HTMLDivElement>(null);
 
@@ -133,11 +98,130 @@ export default function SMLDashboard() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Fetch external APIs (NY Times & Guardian)
+  // Fetch interaction status - same as post detail page
+  const fetchPostInteractionStatus = async (postId: string) => {
+    try {
+      const response = await fetch(`/api/posts/${postId}`, {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          liked: data.user_liked || false,
+          bookmarked: data.user_bookmarked || false,
+          likeCount: data.likes_count || 0,
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching post interaction status:", error);
+    }
+    return null;
+  };
+
+  // Handle like - same logic as post detail page
+  const handleLike = async (postId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const currentState = postInteractions[postId];
+    const newLiked = !currentState?.liked;
+
+    // Optimistic update
+    setPostInteractions((prev) => ({
+      ...prev,
+      [postId]: {
+        ...prev[postId],
+        liked: newLiked,
+        likeCount: newLiked
+          ? (prev[postId]?.likeCount || 0) + 1
+          : Math.max((prev[postId]?.likeCount || 0) - 1, 0),
+      },
+    }));
+
+    try {
+      const response = await fetch(`/api/posts/${postId}/like`, {
+        method: newLiked ? "POST" : "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        // Revert on error
+        setPostInteractions((prev) => ({
+          ...prev,
+          [postId]: currentState,
+        }));
+      } else {
+        // Refetch to get accurate state
+        const updatedStatus = await fetchPostInteractionStatus(postId);
+        if (updatedStatus) {
+          setPostInteractions((prev) => ({
+            ...prev,
+            [postId]: updatedStatus,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      // Revert on error
+      setPostInteractions((prev) => ({
+        ...prev,
+        [postId]: currentState,
+      }));
+    }
+  };
+
+  // Handle bookmark - same logic as post detail page
+  const handleBookmark = async (postId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const currentState = postInteractions[postId];
+    const newBookmarked = !currentState?.bookmarked;
+
+    // Optimistic update
+    setPostInteractions((prev) => ({
+      ...prev,
+      [postId]: {
+        ...prev[postId],
+        bookmarked: newBookmarked,
+      },
+    }));
+
+    try {
+      const response = await fetch(`/api/posts/${postId}/bookmark`, {
+        method: newBookmarked ? "POST" : "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        // Revert on error
+        setPostInteractions((prev) => ({
+          ...prev,
+          [postId]: currentState,
+        }));
+      } else {
+        // Refetch to get accurate state
+        const updatedStatus = await fetchPostInteractionStatus(postId);
+        if (updatedStatus) {
+          setPostInteractions((prev) => ({
+            ...prev,
+            [postId]: updatedStatus,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling bookmark:", error);
+      // Revert on error
+      setPostInteractions((prev) => ({
+        ...prev,
+        [postId]: currentState,
+      }));
+    }
+  };
+
   const fetchExternalAPIs = async () => {
     const externalPosts: FeedPost[] = [];
 
-    // NY Times Books API
     try {
       const nytResponse = await fetch(
         "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=DEMO_KEY"
@@ -186,7 +270,6 @@ export default function SMLDashboard() {
       console.error("Error fetching NY Times books:", error);
     }
 
-    // Guardian API
     try {
       const guardianResponse = await fetch(
         "https://content.guardianapis.com/search?section=books&show-fields=trailText,thumbnail&page-size=10&api-key=test"
@@ -226,7 +309,6 @@ export default function SMLDashboard() {
     return externalPosts;
   };
 
-  // Fetch internal posts from API
   const fetchInternalPosts = async (pageNum: number) => {
     try {
       const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
@@ -254,6 +336,18 @@ export default function SMLDashboard() {
           cover_image_caption: post.cover_image_caption || null,
         }));
 
+        // Fetch interactions for all posts (matching post detail logic)
+        const interactions: typeof postInteractions = {};
+        await Promise.all(
+          internalPosts.map(async (post) => {
+            const status = await fetchPostInteractionStatus(post.id);
+            if (status) {
+              interactions[post.id] = status;
+            }
+          })
+        );
+        setPostInteractions((prev) => ({ ...prev, ...interactions }));
+
         return {
           posts: internalPosts,
           hasMore: data.hasMore || false,
@@ -267,23 +361,20 @@ export default function SMLDashboard() {
     }
   };
 
-  // Initial fetch - SORTED BY DATE
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoadingPosts(true);
 
-      // Fetch both external and internal posts
       const [externalPosts, internalData] = await Promise.all([
         fetchExternalAPIs(),
         fetchInternalPosts(1),
       ]);
 
-      // Combine all posts and sort by date (latest first)
       const allPosts = [...externalPosts, ...internalData.posts].sort(
         (a, b) => {
           const dateA = new Date(a.created_at).getTime();
           const dateB = new Date(b.created_at).getTime();
-          return dateB - dateA; // Newest first
+          return dateB - dateA;
         }
       );
 
@@ -295,7 +386,6 @@ export default function SMLDashboard() {
     fetchInitialData();
   }, []);
 
-  // Load more posts
   const loadMorePosts = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
 
@@ -305,8 +395,6 @@ export default function SMLDashboard() {
     const internalData = await fetchInternalPosts(nextPage);
 
     if (internalData.posts.length > 0) {
-      // Simply append new posts without re-sorting
-      // They should already be in chronological order from the API
       setFeedPosts((prev) => [...prev, ...internalData.posts]);
       setPage(nextPage);
       setHasMore(internalData.hasMore);
@@ -317,7 +405,6 @@ export default function SMLDashboard() {
     setIsLoadingMore(false);
   }, [page, isLoadingMore, hasMore]);
 
-  // Infinite scroll observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -335,7 +422,6 @@ export default function SMLDashboard() {
     return () => observer.disconnect();
   }, [loadMorePosts, hasMore, isLoadingMore]);
 
-  // Fetch trending books
   useEffect(() => {
     const fetchTrending = async () => {
       setLoadingTrending(true);
@@ -368,7 +454,6 @@ export default function SMLDashboard() {
     fetchTrending();
   }, []);
 
-  // Fetch user profile
   useEffect(() => {
     const fetchUser = async () => {
       setLoadingUser(true);
@@ -386,6 +471,8 @@ export default function SMLDashboard() {
               username: data.user.email?.split("@")[0] || "user",
               avatar: generateAvatar(data.user.full_name || "User"),
               email: data.user.email || "",
+              id: data.user.id,
+              full_name: data.user.full_name,
             });
           }
         }
@@ -414,19 +501,12 @@ export default function SMLDashboard() {
     }
   };
 
-  const handleInteraction = (action: string) => {
-    console.log(`User wants to ${action} - feature coming soon!`);
-  };
-
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
-      {/* Left Sidebar */}
       <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* Main Content */}
       <main className="pt-16 lg:pt-0 lg:ml-72 lg:mr-96 min-h-screen">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {/* Welcome Header */}
           {user && (
             <div className="mb-6 sm:mb-8 bg-gradient-to-r from-neutral-900 to-neutral-800 border border-neutral-800 rounded-xl p-6">
               <h1 className="text-2xl sm:text-3xl font-serif text-neutral-100 mb-2">
@@ -438,7 +518,6 @@ export default function SMLDashboard() {
             </div>
           )}
 
-          {/* Feed Header */}
           <div className="mb-6 sm:mb-8">
             <h2 className="text-2xl sm:text-3xl font-serif text-neutral-100 mb-2">
               Your Feed
@@ -448,7 +527,6 @@ export default function SMLDashboard() {
             </p>
           </div>
 
-          {/* Loading State */}
           {loadingPosts ? (
             <div className="flex flex-col items-center justify-center py-16">
               <Loader
@@ -458,7 +536,6 @@ export default function SMLDashboard() {
               <p className="text-neutral-500 text-sm">Loading your feed...</p>
             </div>
           ) : feedPosts.length === 0 ? (
-            /* Empty State */
             <div className="text-center py-16">
               <BookOpen size={48} className="mx-auto mb-4 text-neutral-700" />
               <h3 className="text-xl text-neutral-300 mb-2">No posts yet</h3>
@@ -547,27 +624,14 @@ export default function SMLDashboard() {
                           className="flex items-center space-x-6 text-sm text-neutral-500"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <button
-                            onClick={() => handleInteraction("like posts")}
-                            className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                          >
-                            <Star size={16} strokeWidth={1.5} />
+                          <div className="flex items-center space-x-2">
+                            <Heart size={16} strokeWidth={1.5} />
                             <span>{post.likes}</span>
-                          </button>
-                          <button
-                            onClick={() => handleInteraction("comment")}
-                            className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                          >
+                          </div>
+                          <div className="flex items-center space-x-2">
                             <MessageCircle size={16} strokeWidth={1.5} />
                             <span>{post.comments}</span>
-                          </button>
-                          <button
-                            onClick={() => handleInteraction("bookmark")}
-                            className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                          >
-                            <Bookmark size={16} strokeWidth={1.5} />
-                            <span>Save</span>
-                          </button>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -631,33 +695,54 @@ export default function SMLDashboard() {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleInteraction("like posts");
-                                }}
-                                className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                                onClick={(e) => handleLike(post.id, e)}
+                                className={`flex items-center space-x-2 transition ${
+                                  postInteractions[post.id]?.liked
+                                    ? "text-red-500"
+                                    : "hover:text-red-400"
+                                }`}
                               >
-                                <Star size={16} strokeWidth={1.5} />
-                                <span>{post.likes}</span>
+                                <Heart
+                                  size={16}
+                                  strokeWidth={1.5}
+                                  fill={
+                                    postInteractions[post.id]?.liked
+                                      ? "currentColor"
+                                      : "none"
+                                  }
+                                />
+                                <span>
+                                  {postInteractions[post.id]?.likeCount ??
+                                    post.likes_count}
+                                </span>
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();
-                                  handleInteraction("comment");
+                                  router.push(`/dashboard/posts/${post.id}`);
                                 }}
                                 className="flex items-center space-x-2 hover:text-neutral-300 transition"
                               >
                                 <MessageCircle size={16} strokeWidth={1.5} />
-                                <span>{post.comments}</span>
+                                <span>{post.comments_count}</span>
                               </button>
                               <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleInteraction("bookmark");
-                                }}
-                                className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                                onClick={(e) => handleBookmark(post.id, e)}
+                                className={`flex items-center space-x-2 transition ${
+                                  postInteractions[post.id]?.bookmarked
+                                    ? "text-yellow-500"
+                                    : "hover:text-yellow-400"
+                                }`}
                               >
-                                <Bookmark size={16} strokeWidth={1.5} />
+                                <Bookmark
+                                  size={16}
+                                  strokeWidth={1.5}
+                                  fill={
+                                    postInteractions[post.id]?.bookmarked
+                                      ? "currentColor"
+                                      : "none"
+                                  }
+                                />
                                 <span>Save</span>
                               </button>
                             </div>

@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Bookmark,
   Plus,
@@ -9,26 +11,67 @@ import {
   Lock,
   Globe,
   Search,
-  Filter,
+  Clock,
   Heart,
   MessageCircle,
-  Eye,
-  MoreVertical,
-  Edit,
-  Trash2,
+  Loader,
 } from "lucide-react";
 import LeftSidebar from "@/app/components/Sidebar";
 
+interface BookmarkedPost {
+  id: string;
+  title: string;
+  excerpt: string;
+  genre: string;
+  read_time: number;
+  created_at: string;
+  author: string;
+  author_id: string;
+  likes_count: number;
+  comments_count: number;
+  cover_image_url?: string | null;
+  cover_image_caption?: string | null;
+  bookmarked_at: string;
+}
+
 export default function ReadingListsPage() {
-  const [activeView, setActiveView] = useState<string>("discover");
+  const router = useRouter();
+  const [activeView, setActiveView] = useState<string>("saved");
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<BookmarkedPost[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const views = [
+    { id: "saved", label: "Saved Posts" },
     { id: "discover", label: "Discover Lists" },
     { id: "my-lists", label: "My Lists" },
-    { id: "saved", label: "Saved Lists" },
   ];
+
+  useEffect(() => {
+    fetchBookmarkedPosts();
+  }, []);
+
+  const fetchBookmarkedPosts = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/bookmarks", {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBookmarkedPosts(data.bookmarks || []);
+      } else {
+        console.error("Failed to fetch bookmarks");
+      }
+    } catch (error) {
+      console.error("Error fetching bookmarks:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const myLists = [
     {
@@ -53,17 +96,6 @@ export default function ReadingListsPage() {
       isPrivate: false,
       coverEmojis: ["🚀", "👽", "🛸", "🌌"],
       lastUpdated: "1 week ago",
-      author: "You",
-    },
-    {
-      id: 3,
-      title: "Private Reading Goals 2024",
-      description: "My personal reading challenge for this year.",
-      books: 8,
-      followers: 0,
-      isPrivate: true,
-      coverEmojis: ["🎯", "📖", "⭐", "📝"],
-      lastUpdated: "3 days ago",
       author: "You",
     },
   ];
@@ -97,91 +129,44 @@ export default function ReadingListsPage() {
       author: "Fantasy Fan",
       authorAvatar: "FF",
     },
-    {
-      id: 6,
-      title: "Books About Books",
-      description: "Meta reads for people who love reading about reading.",
-      books: 22,
-      followers: 2789,
-      likes: 654,
-      isPrivate: false,
-      coverEmojis: ["📖", "📚", "✍️", "💭"],
-      lastUpdated: "5 days ago",
-      author: "Literary Lou",
-      authorAvatar: "LL",
-    },
-    {
-      id: 7,
-      title: "Emotional Rollercoaster Reads",
-      description:
-        "Keep tissues nearby. These books will make you feel everything.",
-      books: 16,
-      followers: 4123,
-      likes: 987,
-      isPrivate: false,
-      coverEmojis: ["😭", "💔", "🌈", "💕"],
-      lastUpdated: "1 week ago",
-      author: "Emotional Emma",
-      authorAvatar: "EE",
-    },
-    {
-      id: 8,
-      title: "Philosophy 101: Beginner's Guide",
-      description:
-        "Start your philosophical journey with these accessible introductions.",
-      books: 20,
-      followers: 3892,
-      likes: 721,
-      isPrivate: false,
-      coverEmojis: ["🤔", "💭", "🧠", "📘"],
-      lastUpdated: "2 weeks ago",
-      author: "Thoughtful Theo",
-      authorAvatar: "TT",
-    },
-    {
-      id: 9,
-      title: "Short Story Collections Worth Your Time",
-      description: "Perfect for when you want complete stories in small doses.",
-      books: 14,
-      followers: 2234,
-      likes: 543,
-      isPrivate: false,
-      coverEmojis: ["📄", "⏱️", "✨", "📚"],
-      lastUpdated: "3 days ago",
-      author: "Quick Reader",
-      authorAvatar: "QR",
-    },
   ];
 
-  const savedLists = [
-    {
-      id: 10,
-      title: "Books That Make You Think",
-      description: "Mind-bending reads that challenge your perspective.",
-      books: 19,
-      followers: 6721,
-      isPrivate: false,
-      coverEmojis: ["🧠", "💭", "🤯", "📚"],
-      lastUpdated: "4 days ago",
-      author: "Deep Thinker",
-      authorAvatar: "DT",
-    },
-    {
-      id: 11,
-      title: "Underrated Gems of 2023",
-      description: "Books that deserved more attention last year.",
-      books: 25,
-      followers: 4532,
-      isPrivate: false,
-      coverEmojis: ["💎", "⭐", "📖", "🌟"],
-      lastUpdated: "1 week ago",
-      author: "Hidden Gem Hunter",
-      authorAvatar: "HG",
-    },
-  ];
+  const handleSignOut = async () => {
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (response.ok) {
+        router.push("/");
+      }
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
-  const handleSignOut = () => {
-    console.log("User signed out");
+  const generateAvatar = (name: string): string => {
+    if (!name) return "??";
+    const nameParts = name.trim().split(" ");
+    if (nameParts.length > 1) {
+      return `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const getRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return "just now";
+    if (diffInSeconds < 3600)
+      return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    if (diffInSeconds < 604800)
+      return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    return date.toLocaleDateString();
   };
 
   const renderListCard = (list: any, showActions: boolean = false) => (
@@ -207,14 +192,8 @@ export default function ReadingListsPage() {
             {list.description}
           </p>
         </div>
-        {showActions && (
-          <button className="p-2 text-neutral-400 hover:bg-neutral-800 rounded-lg transition ml-2">
-            <MoreVertical size={18} strokeWidth={1.5} />
-          </button>
-        )}
       </div>
 
-      {/* Book Covers Preview */}
       <div className="flex space-x-2 mb-4">
         {list.coverEmojis.map((emoji: string, idx: number) => (
           <div
@@ -231,7 +210,6 @@ export default function ReadingListsPage() {
         )}
       </div>
 
-      {/* Author Info */}
       <div className="flex items-center space-x-2 mb-3">
         {list.authorAvatar && (
           <div className="w-6 h-6 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium">
@@ -245,7 +223,6 @@ export default function ReadingListsPage() {
         <span className="text-xs text-neutral-600">{list.lastUpdated}</span>
       </div>
 
-      {/* Stats */}
       <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
         <div className="flex items-center space-x-4 text-sm text-neutral-500">
           <span className="flex items-center">
@@ -265,11 +242,78 @@ export default function ReadingListsPage() {
             </span>
           )}
         </div>
-        {!list.isPrivate && activeView === "discover" && (
-          <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded text-xs font-medium transition">
-            Save List
-          </button>
-        )}
+      </div>
+    </div>
+  );
+
+  const renderBookmarkedPost = (post: BookmarkedPost) => (
+    <div
+      key={post.id}
+      onClick={() => router.push(`/dashboard/posts/${post.id}`)}
+      className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all cursor-pointer"
+    >
+      {post.cover_image_url && (
+        <div className="relative w-full h-48">
+          <Image
+            src={post.cover_image_url}
+            alt={post.cover_image_caption || post.title}
+            fill
+            className="object-cover"
+          />
+        </div>
+      )}
+
+      <div className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start space-x-3 flex-1 min-w-0">
+            <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
+              {generateAvatar(post.author)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-neutral-300 text-sm truncate">
+                {post.author}
+              </p>
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
+                <span className="whitespace-nowrap">
+                  {getRelativeTime(post.created_at)}
+                </span>
+                <span>·</span>
+                <span className="flex items-center whitespace-nowrap">
+                  <Clock size={12} className="mr-1" strokeWidth={1.5} />
+                  {post.read_time} min
+                </span>
+              </div>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-3">
+            {post.genre}
+          </span>
+        </div>
+
+        <div>
+          <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words leading-snug">
+            {post.title}
+          </h3>
+          <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
+            {post.excerpt}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+          <div className="flex items-center space-x-6 text-sm text-neutral-500">
+            <span className="flex items-center">
+              <Heart size={16} className="mr-1" strokeWidth={1.5} />
+              {post.likes_count}
+            </span>
+            <span className="flex items-center">
+              <MessageCircle size={16} className="mr-1" strokeWidth={1.5} />
+              {post.comments_count}
+            </span>
+          </div>
+          <span className="text-xs text-neutral-600">
+            Saved {getRelativeTime(post.bookmarked_at)}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -278,10 +322,8 @@ export default function ReadingListsPage() {
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* Main Content */}
       <main className="ml-72 min-h-screen">
-        {/* Header */}
-        <div className="sticky top-0 z-10">
+        <div className="sticky top-0 z-10 bg-neutral-950">
           <div className="max-w-7xl mx-auto px-6 py-6">
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -294,8 +336,7 @@ export default function ReadingListsPage() {
                   Reading Lists
                 </h1>
                 <p className="text-sm text-neutral-500">
-                  Curated collections of books organized by theme, genre, or
-                  mood
+                  Your saved posts and curated reading collections
                 </p>
               </div>
               <button
@@ -307,7 +348,6 @@ export default function ReadingListsPage() {
               </button>
             </div>
 
-            {/* View Tabs */}
             <div className="flex items-center justify-between">
               <div className="flex space-x-2">
                 {views.map((view) => (
@@ -325,7 +365,6 @@ export default function ReadingListsPage() {
                 ))}
               </div>
 
-              {/* Search */}
               <div className="relative">
                 <Search
                   className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500"
@@ -336,7 +375,7 @@ export default function ReadingListsPage() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search lists..."
+                  placeholder="Search..."
                   className="pl-10 pr-4 py-2 w-64 bg-neutral-800 border border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-neutral-600 text-neutral-200 placeholder-neutral-500"
                 />
               </div>
@@ -344,8 +383,56 @@ export default function ReadingListsPage() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Saved Posts View */}
+          {activeView === "saved" && (
+            <div>
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Loader
+                    className="animate-spin text-neutral-600 mb-4"
+                    size={40}
+                  />
+                  <p className="text-neutral-500 text-sm">
+                    Loading your saved posts...
+                  </p>
+                </div>
+              ) : bookmarkedPosts.length > 0 ? (
+                <div>
+                  <div className="mb-4">
+                    <p className="text-sm text-neutral-500">
+                      {bookmarkedPosts.length} saved{" "}
+                      {bookmarkedPosts.length === 1 ? "post" : "posts"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {bookmarkedPosts.map((post) => renderBookmarkedPost(post))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <Bookmark
+                    className="mx-auto text-neutral-700 mb-4"
+                    size={64}
+                    strokeWidth={1}
+                  />
+                  <h3 className="text-xl font-serif text-neutral-300 mb-2">
+                    No saved posts yet
+                  </h3>
+                  <p className="text-neutral-500 mb-6">
+                    Start bookmarking posts to see them here
+                  </p>
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="px-6 py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg font-medium transition border border-neutral-700"
+                  >
+                    Explore Posts
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* My Lists View */}
           {activeView === "my-lists" && (
             <div>
@@ -383,37 +470,6 @@ export default function ReadingListsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {discoverLists.map((list) => renderListCard(list, false))}
               </div>
-            </div>
-          )}
-
-          {/* Saved Lists View */}
-          {activeView === "saved" && (
-            <div>
-              {savedLists.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {savedLists.map((list) => renderListCard(list, false))}
-                </div>
-              ) : (
-                <div className="text-center py-16">
-                  <Bookmark
-                    className="mx-auto text-neutral-700 mb-4"
-                    size={64}
-                    strokeWidth={1}
-                  />
-                  <h3 className="text-xl font-serif text-neutral-300 mb-2">
-                    No saved lists
-                  </h3>
-                  <p className="text-neutral-500 mb-6">
-                    Save lists from other users to see them here
-                  </p>
-                  <button
-                    onClick={() => setActiveView("discover")}
-                    className="px-6 py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg font-medium transition border border-neutral-700"
-                  >
-                    Discover Lists
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>

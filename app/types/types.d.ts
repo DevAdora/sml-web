@@ -59,3 +59,23 @@ export interface NavItem {
   href: string;
 
 }
+
+interface PostData {
+  id: string;
+  title: string;
+  content: string;
+  excerpt: string;
+  genre: string;
+  read_time: number;
+  created_at: string;
+  author: string;
+  author_id: string;
+  avatar_url: string | null;
+  likes_count: number;
+  comments_count: number;
+  user_liked: boolean;
+  user_bookmarked: boolean;
+  tags: string[];
+  cover_image_url?: string | null;
+  cover_image_caption?: string | null;
+}

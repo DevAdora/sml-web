@@ -48,7 +48,6 @@ export default function PostDetailPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [user, setUser] = useState<any>(null);
 
-  // Dummy data for sidebars
   const trendingBooks: any[] = [];
   const internalTrending = [
     { tag: "literary-fiction", posts: "2.3k", growth: "+12%" },
@@ -88,7 +87,6 @@ export default function PostDetailPage() {
     fetchPost();
   }, [postId]);
 
-  // Fetch user for authentication checks
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -161,9 +159,7 @@ export default function PostDetailPage() {
           text: post?.excerpt,
           url: shareUrl,
         });
-      } catch (error) {
-        // User cancelled
-      }
+      } catch (error) {}
     } else {
       try {
         await navigator.clipboard.writeText(shareUrl);
@@ -330,7 +326,6 @@ export default function PostDetailPage() {
               </div>
             </header>
 
-            {/* Cover Image Section - Similar to Medium/Substack */}
             {post.cover_image_url && (
               <div className="relative w-full">
                 <div className="relative w-full h-64 sm:h-96 lg:h-[500px]">
@@ -343,7 +338,7 @@ export default function PostDetailPage() {
                   />
                 </div>
                 {post.cover_image_caption && (
-                  <div className="px-6 sm:px-8 lg:px-12 py-3 bg-neutral-800/50 border-b border-neutral-800">
+                  <div className="px-6 sm:px-8 lg:px-12 py-3">
                     <p className="text-xs sm:text-sm text-neutral-400 text-center italic">
                       {post.cover_image_caption}
                     </p>
