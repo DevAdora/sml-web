@@ -1,3 +1,5 @@
+// File location: app/api/posts/[id]/route.ts
+
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
@@ -7,7 +9,6 @@ export async function GET(
     context: { params: Promise<{ id: string }> }
 ) {
     try {
-        // Next.js 15: params is now a Promise and must be awaited
         const params = await context.params;
         const cookieStore = await cookies();
         const postId = params.id;
@@ -29,12 +30,10 @@ export async function GET(
             }
         );
 
-        // Get authenticated user (if any)
         const { data: authData } = await supabase.auth.getUser();
         const userId = authData?.user?.id;
 
-        // Fetch the post with author profile
-        // First, get the post
+        // Fetch the post with all fields including image data
         const { data: post, error: postError } = await supabase
             .schema("sml")
             .from("posts")
@@ -50,7 +49,7 @@ export async function GET(
             );
         }
 
-        // Separately fetch the author profile
+        // Fetch author profile
         let authorProfile = null;
         if (post.author_id) {
             const { data: profile } = await supabase
@@ -77,7 +76,7 @@ export async function GET(
             .select("*", { count: "exact", head: true })
             .eq("post_id", postId);
 
-        // Check if user has liked this post
+        // Check if user liked the post
         let userLiked = false;
         if (userId) {
             const { data: likeData } = await supabase
@@ -91,7 +90,7 @@ export async function GET(
             userLiked = !!likeData;
         }
 
-        // Check if user has bookmarked this post
+        // Check if user bookmarked the post
         let userBookmarked = false;
         if (userId) {
             const { data: bookmarkData } = await supabase
@@ -105,7 +104,7 @@ export async function GET(
             userBookmarked = !!bookmarkData;
         }
 
-        // Fetch tags for this post (if tags tables exist)
+        // Fetch tags
         let tags: string[] = [];
         try {
             const { data: tagData } = await supabase
@@ -120,11 +119,10 @@ export async function GET(
 
             tags = tagData?.map((t: any) => t.tags?.name).filter(Boolean) || [];
         } catch (error) {
-            // Tags table might not exist yet, that's okay
             console.log("Tags not available");
         }
 
-        // Format response
+        // Build response with all data including image fields
         const response = {
             id: post.id,
             title: post.title,
@@ -141,6 +139,9 @@ export async function GET(
             user_liked: userLiked,
             user_bookmarked: userBookmarked,
             tags: tags,
+            // NEW: Image fields
+            cover_image_url: post.cover_image_url || null,
+            cover_image_caption: post.cover_image_caption || null,
         };
 
         return NextResponse.json(response, { status: 200 });

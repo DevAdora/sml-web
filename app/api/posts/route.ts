@@ -48,14 +48,13 @@ export async function GET(request: Request) {
 
         if (unlimited && actualTotalPosts > 0) {
             // UNLIMITED MODE: Cycle through posts indefinitely
-            // Calculate which "cycle" we're in and the offset within that cycle
             const postsPerCycle = actualTotalPosts;
             const cycleNumber = Math.floor(((page - 1) * limit) / postsPerCycle);
             const offsetWithinCycle = ((page - 1) * limit) % postsPerCycle;
 
             console.log(`Unlimited mode - Page: ${page}, Cycle: ${cycleNumber}, Offset: ${offsetWithinCycle}`);
 
-            // Fetch posts with cycling
+            // Fetch posts with cycling - include image fields
             const result = await supabase
                 .schema("sml")
                 .from("posts")
@@ -112,7 +111,7 @@ export async function GET(request: Request) {
                     success: true,
                     posts: [],
                     count: 0,
-                    hasMore: unlimited ? true : false, // In unlimited mode, always more
+                    hasMore: unlimited ? true : false,
                 },
                 { status: 200 }
             );
@@ -138,20 +137,21 @@ export async function GET(request: Request) {
             profileMap.set(profile.id, profile);
         });
 
-        // Combine posts with author information
+        // Combine posts with author information and image data
         const postsWithAuthors = posts.map(post => {
             const authorProfile = profileMap.get(post.author_id);
             return {
                 ...post,
                 author_name: authorProfile?.full_name || null,
+                cover_image_url: post.cover_image_url || null,
+                cover_image_caption: post.cover_image_caption || null,
             };
         });
 
         // Determine if there are more posts
-        let hasMore = unlimited ? true : false; // In unlimited mode, always true
+        let hasMore = unlimited ? true : false;
 
         if (!unlimited) {
-            // Check if there are more posts in normal mode
             const offset = (page - 1) * limit;
             const { data: nextPageCheck } = await supabase
                 .schema("sml")
@@ -218,7 +218,17 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { title, excerpt, content, genre, tags, status, read_time } = body;
+        const {
+            title,
+            excerpt,
+            content,
+            genre,
+            tags,
+            status,
+            read_time,
+            cover_image_url,
+            cover_image_caption,
+        } = body;
 
         // Validate required fields
         if (!title || !excerpt || !content || !genre) {
@@ -228,7 +238,7 @@ export async function POST(request: Request) {
             );
         }
 
-        // Insert post into database using sml schema
+        // Insert post into database using sml schema with image support
         const { data: post, error: insertError } = await supabase
             .schema("sml")
             .from("posts")
@@ -242,6 +252,8 @@ export async function POST(request: Request) {
                 status: status || "draft",
                 read_time: read_time || 1,
                 published_at: status === "published" ? new Date().toISOString() : null,
+                cover_image_url: cover_image_url || null,
+                cover_image_caption: cover_image_caption || null,
             })
             .select()
             .single();

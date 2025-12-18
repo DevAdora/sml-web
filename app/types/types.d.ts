@@ -25,6 +25,8 @@ export interface FeedPost {
   read_time: number;
   created_at: string;
   isExternal?: boolean;
+  cover_image_url?: string | null;
+  cover_image_caption?: string | null;
 }
 
 export interface TrendingTopic {

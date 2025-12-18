@@ -4,10 +4,6 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BookOpen,
   MessageCircle,
-  Users,
-  Search,
-  Bell,
-  Hash,
   Clock,
   Star,
   Bookmark,
@@ -15,6 +11,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import LeftSidebar from "@/app/components/Sidebar";
 import { RightSidebar } from "../components/TrendingBar";
 
@@ -46,6 +43,8 @@ interface FeedPost {
   read_time: number;
   created_at: string;
   isExternal?: boolean;
+  cover_image_url?: string | null;
+  cover_image_caption?: string | null;
 }
 
 interface TrendingTopic {
@@ -200,21 +199,21 @@ export default function SMLDashboard() {
             id: `guardian-${article.id}`,
             title: article.webTitle,
             author: "The Guardian",
-            author_id: "guardian-books",
+            author_id: "guardian",
             avatar: "TG",
-            genre: "Book Review",
-            likes: Math.floor(Math.random() * 400) + 50,
+            genre: article.sectionName || "Books",
+            likes: Math.floor(Math.random() * 300) + 50,
             comments: Math.floor(Math.random() * 80) + 5,
-            readTime: `${Math.floor(Math.random() * 8) + 4} min`,
+            readTime: `${Math.floor(Math.random() * 8) + 3} min`,
             excerpt:
-              (article.fields && article.fields.trailText) ||
-              "An insightful review from The Guardian Books section.",
+              article.fields?.trailText ||
+              "An insightful article from The Guardian.",
             timestamp: getRelativeTime(article.webPublicationDate),
             link: article.webUrl,
             source: "The Guardian",
-            likes_count: Math.floor(Math.random() * 400) + 50,
+            likes_count: Math.floor(Math.random() * 300) + 50,
             comments_count: Math.floor(Math.random() * 80) + 5,
-            read_time: Math.floor(Math.random() * 8) + 4,
+            read_time: Math.floor(Math.random() * 8) + 3,
             created_at: article.webPublicationDate,
             isExternal: true,
           });
@@ -227,78 +226,137 @@ export default function SMLDashboard() {
     return externalPosts;
   };
 
-  // Fetch internal posts from Supabase with proper user details
+  // Fetch internal posts from API
   const fetchInternalPosts = async (pageNum: number) => {
     try {
-      const response = await fetch(
-        `/api/posts?page=${pageNum}&limit=10&include_external=false`
-      );
-      if (!response.ok) {
-        throw new Error("Failed to fetch internal posts");
-      }
+      const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
       const data = await response.json();
 
-      // Map the posts to include proper user details
-      const posts = (data.posts || []).map((post: any) => {
-        const authorName =
-          post.author_name || post.profiles?.full_name || "Anonymous";
-        const avatar = generateAvatar(authorName);
-
-        return {
+      if (data.success && data.posts) {
+        const internalPosts: FeedPost[] = data.posts.map((post: any) => ({
           id: post.id,
           title: post.title,
-          author: authorName,
+          author: post.author_name || "Anonymous",
           author_id: post.author_id,
-          avatar: avatar,
+          avatar: generateAvatar(post.author_name || "Anonymous"),
           genre: post.genre || "General",
           likes: post.likes_count || 0,
           comments: post.comments_count || 0,
           readTime: `${post.read_time || 5} min`,
           excerpt: post.excerpt || "",
-          timestamp: getRelativeTime(post.created_at),
+          timestamp: getRelativeTime(post.created_at || post.published_at),
           likes_count: post.likes_count || 0,
           comments_count: post.comments_count || 0,
           read_time: post.read_time || 5,
-          created_at: post.created_at,
+          created_at: post.created_at || post.published_at,
           isExternal: false,
-        };
-      });
+          cover_image_url: post.cover_image_url || null,
+          cover_image_caption: post.cover_image_caption || null,
+        }));
 
-      return posts;
+        return {
+          posts: internalPosts,
+          hasMore: data.hasMore || false,
+        };
+      }
+
+      return { posts: [], hasMore: false };
     } catch (error) {
       console.error("Error fetching internal posts:", error);
-      return [];
+      return { posts: [], hasMore: false };
     }
   };
 
-  // Fetch trending books from NY Times
+  // Initial fetch - SORTED BY DATE
   useEffect(() => {
-    const fetchTrendingBooks = async () => {
+    const fetchInitialData = async () => {
+      setLoadingPosts(true);
+
+      // Fetch both external and internal posts
+      const [externalPosts, internalData] = await Promise.all([
+        fetchExternalAPIs(),
+        fetchInternalPosts(1),
+      ]);
+
+      // Combine all posts and sort by date (latest first)
+      const allPosts = [...externalPosts, ...internalData.posts].sort(
+        (a, b) => {
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          return dateB - dateA; // Newest first
+        }
+      );
+
+      setFeedPosts(allPosts);
+      setHasMore(internalData.hasMore);
+      setLoadingPosts(false);
+    };
+
+    fetchInitialData();
+  }, []);
+
+  // Load more posts
+  const loadMorePosts = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+
+    const internalData = await fetchInternalPosts(nextPage);
+
+    if (internalData.posts.length > 0) {
+      // Simply append new posts without re-sorting
+      // They should already be in chronological order from the API
+      setFeedPosts((prev) => [...prev, ...internalData.posts]);
+      setPage(nextPage);
+      setHasMore(internalData.hasMore);
+    } else {
+      setHasMore(false);
+    }
+
+    setIsLoadingMore(false);
+  }, [page, isLoadingMore, hasMore]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          loadMorePosts();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [loadMorePosts, hasMore, isLoadingMore]);
+
+  // Fetch trending books
+  useEffect(() => {
+    const fetchTrending = async () => {
       setLoadingTrending(true);
       try {
         const response = await fetch(
-          "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=DEMO_KEY"
+          "https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json?api-key=DEMO_KEY"
         );
         const data = await response.json();
 
-        if (data.results && data.results.lists) {
-          const books: TrendingBook[] = [];
-          data.results.lists.slice(0, 3).forEach((list: any) => {
-            list.books.slice(0, 2).forEach((book: any) => {
-              books.push({
-                title: book.title,
-                author: book.author,
-                category: list.list_name,
-                discussions: Math.floor(Math.random() * 200) + 50,
-                link:
-                  book.amazon_product_url ||
-                  (book.buy_links && book.buy_links[0]
-                    ? book.buy_links[0].url
-                    : undefined),
-              });
-            });
-          });
-          setTrendingBooks(books.slice(0, 5));
+        if (data.results && data.results.books) {
+          const books: TrendingBook[] = data.results.books
+            .slice(0, 5)
+            .map((book: any) => ({
+              title: book.title,
+              author: book.author,
+              category: "Fiction",
+              discussions: Math.floor(Math.random() * 500) + 100,
+              link: book.amazon_product_url,
+            }));
+
+          setTrendingBooks(books);
         }
       } catch (error) {
         console.error("Error fetching trending books:", error);
@@ -307,12 +365,12 @@ export default function SMLDashboard() {
       }
     };
 
-    fetchTrendingBooks();
+    fetchTrending();
   }, []);
 
   // Fetch user profile
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const fetchUser = async () => {
       setLoadingUser(true);
       try {
         const response = await fetch("/api/user", {
@@ -320,319 +378,121 @@ export default function SMLDashboard() {
           credentials: "include",
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch user profile");
+        if (response.ok) {
+          const data = await response.json();
+          if (data.authenticated && data.user) {
+            setUser({
+              name: data.user.full_name || "User",
+              username: data.user.email?.split("@")[0] || "user",
+              avatar: generateAvatar(data.user.full_name || "User"),
+              email: data.user.email || "",
+            });
+          }
         }
-
-        const data = await response.json();
-
-        if (!data.authenticated) {
-          setUser(null);
-          setLoadingUser(false);
-          return;
-        }
-
-        const username = data.username || data.email.split("@")[0];
-        let avatar = "";
-        if (data.full_name) {
-          const nameParts = data.full_name.split(" ");
-          avatar =
-            nameParts.length > 1
-              ? `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase()
-              : data.full_name.substring(0, 2).toUpperCase();
-        } else {
-          avatar = data.email.substring(0, 2).toUpperCase();
-        }
-
-        const userData: UserProfile = {
-          name: data.full_name || data.email,
-          username: username,
-          avatar: avatar,
-          email: data.email,
-        };
-
-        setUser(userData);
       } catch (error) {
-        console.error("Error fetching user profile:", error);
-        setUser(null);
+        console.error("Error fetching user:", error);
       } finally {
         setLoadingUser(false);
       }
     };
 
-    fetchUserProfile();
+    fetchUser();
   }, []);
-
-  // Initial load: fetch external APIs first, then internal posts
-  useEffect(() => {
-    const loadInitialPosts = async () => {
-      setLoadingPosts(true);
-
-      const externalPosts = await fetchExternalAPIs();
-      const internalPosts = await fetchInternalPosts(1);
-
-      const allPosts = [...externalPosts, ...internalPosts].sort((a, b) => {
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      });
-
-      setFeedPosts(allPosts);
-      setHasMore(internalPosts.length === 10); // If we got 10, there might be more
-      setLoadingPosts(false);
-    };
-
-    loadInitialPosts();
-  }, []);
-
-  // Fetch more internal posts with improved logic
-  const fetchMorePosts = useCallback(async () => {
-    if (isLoadingMore || !hasMore) return;
-
-    setIsLoadingMore(true);
-
-    const newPosts = await fetchInternalPosts(page + 1);
-
-    if (newPosts.length > 0) {
-      setFeedPosts((prevPosts) => {
-        const merged = [...prevPosts, ...newPosts];
-        return merged.sort((a, b) => {
-          return (
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-        });
-      });
-      setPage((prevPage) => prevPage + 1);
-      setHasMore(newPosts.length === 10); // If we got less than 10, no more posts
-    } else {
-      setHasMore(false);
-    }
-
-    setIsLoadingMore(false);
-  }, [page, isLoadingMore, hasMore]);
-
-  // Intersection Observer for infinite scroll
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          !isLoadingMore &&
-          !loadingPosts &&
-          hasMore
-        ) {
-          fetchMorePosts();
-        }
-      },
-      { threshold: 0.1, rootMargin: "100px" }
-    );
-
-    const currentTarget = observerTarget.current;
-    if (currentTarget) {
-      observer.observe(currentTarget);
-    }
-
-    return () => {
-      if (currentTarget) {
-        observer.unobserve(currentTarget);
-      }
-    };
-  }, [isLoadingMore, loadingPosts, hasMore, fetchMorePosts]);
 
   const handleSignOut = async () => {
     try {
       const response = await fetch("/api/logout", {
         method: "POST",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
       });
 
       if (response.ok) {
-        setUser(null);
         window.location.href = "/";
-      } else {
-        console.error("Sign out failed");
-        alert("Failed to sign out. Please try again.");
       }
     } catch (error) {
       console.error("Error signing out:", error);
-      alert("An error occurred while signing out.");
-    }
-  };
-
-  const handleExternalPostClick = (post: FeedPost) => {
-    if (post.link) {
-      window.open(post.link, "_blank");
     }
   };
 
   const handleInteraction = (action: string) => {
-    if (!user) {
-      alert(`Please sign in to ${action}`);
-      return false;
-    }
-    return true;
+    console.log(`User wants to ${action} - feature coming soon!`);
   };
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
+      {/* Left Sidebar */}
       <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* Responsive main content */}
+      {/* Main Content */}
       <main className="pt-16 lg:pt-0 lg:ml-72 lg:mr-96 min-h-screen">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          {/* Search Bar */}
-          <div className="mb-6 lg:mb-8">
-            <div className="relative">
-              <Search
-                className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-neutral-500"
-                size={18}
-                strokeWidth={1.5}
-              />
-              <input
-                type="text"
-                placeholder="Search books, reviews, authors..."
-                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 bg-neutral-900 border border-neutral-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-neutral-700 focus:border-neutral-700 text-neutral-200 placeholder-neutral-500 text-sm sm:text-base"
-              />
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          {/* Welcome Header */}
+          {user && (
+            <div className="mb-6 sm:mb-8 bg-gradient-to-r from-neutral-900 to-neutral-800 border border-neutral-800 rounded-xl p-6">
+              <h1 className="text-2xl sm:text-3xl font-serif text-neutral-100 mb-2">
+                Welcome back, {user.name}!
+              </h1>
+              <p className="text-neutral-400 text-sm">
+                Discover new stories and share your thoughts with the community
+              </p>
             </div>
-          </div>
+          )}
 
-          {/* Welcome Section */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 sm:p-6 mb-6 lg:mb-8">
-            <h2 className="text-lg sm:text-xl font-serif text-neutral-200 mb-1 sm:mb-2">
-              Welcome back, {user ? user.name : "Reader"}
+          {/* Feed Header */}
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-2xl sm:text-3xl font-serif text-neutral-100 mb-2">
+              Your Feed
             </h2>
-            <p className="text-neutral-500 text-xs sm:text-sm">
-              {feedPosts.length} posts in your feed
+            <p className="text-neutral-500 text-sm">
+              {feedPosts.length} posts sorted by latest
             </p>
           </div>
 
           {/* Loading State */}
           {loadingPosts ? (
-            <div className="flex flex-col items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center py-16">
               <Loader
                 className="animate-spin text-neutral-600 mb-4"
-                size={32}
+                size={40}
               />
-              <p className="text-neutral-500 text-sm">Loading posts...</p>
+              <p className="text-neutral-500 text-sm">Loading your feed...</p>
+            </div>
+          ) : feedPosts.length === 0 ? (
+            /* Empty State */
+            <div className="text-center py-16">
+              <BookOpen size={48} className="mx-auto mb-4 text-neutral-700" />
+              <h3 className="text-xl text-neutral-300 mb-2">No posts yet</h3>
+              <p className="text-neutral-500">
+                Be the first to share something!
+              </p>
             </div>
           ) : (
             <>
-              {/* Feed Posts */}
-              <div className="space-y-4 sm:space-y-6">
-                {feedPosts.length === 0 ? (
-                  <div className="text-center py-12">
-                    <BookOpen
-                      className="mx-auto text-neutral-700 mb-4"
-                      size={64}
-                      strokeWidth={1}
-                    />
-                    <h3 className="text-xl font-serif text-neutral-300 mb-2">
-                      No posts yet
-                    </h3>
-                    <p className="text-neutral-500">
-                      Be the first to share a review!
-                    </p>
-                  </div>
-                ) : (
-                  feedPosts.map((post) =>
-                    post.isExternal ? (
-                      // External posts - click to open in new tab
-                      <article
-                        key={post.id}
-                        className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 sm:p-6 hover:border-neutral-700 transition cursor-pointer"
-                        onClick={() => handleExternalPostClick(post)}
-                      >
-                        {/* Post Header */}
-                        <div className="flex items-start space-x-3 mb-3 sm:mb-4">
-                          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
-                            {post.avatar}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-neutral-300 text-sm truncate">
-                              {post.author}
-                            </p>
-                            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
-                              <span className="whitespace-nowrap">
-                                {post.timestamp}
-                              </span>
-                              <span className="hidden sm:inline">·</span>
-                              <span className="flex items-center whitespace-nowrap">
-                                <Clock
-                                  size={11}
-                                  className="mr-1"
-                                  strokeWidth={1.5}
-                                />
-                                {post.readTime}
-                              </span>
-                              {post.source && (
-                                <>
-                                  <span className="hidden sm:inline">·</span>
-                                  <span className="text-neutral-500 whitespace-nowrap">
-                                    {post.source}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <span className="px-2 sm:px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap flex-shrink-0">
-                            {post.genre}
-                          </span>
+              <div className="space-y-6">
+                {feedPosts.map((post) =>
+                  post.isExternal ? (
+                    <article
+                      key={post.id}
+                      onClick={() =>
+                        post.link && window.open(post.link, "_blank")
+                      }
+                      className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all cursor-pointer"
+                    >
+                      {post.cover_image_url && (
+                        <div className="relative w-full h-48 sm:h-64">
+                          <Image
+                            src={post.cover_image_url}
+                            alt={post.title}
+                            fill
+                            className="object-cover"
+                          />
                         </div>
+                      )}
 
-                        {/* Post Content */}
-                        <div>
-                          <h3 className="text-base sm:text-xl font-serif text-neutral-100 mb-2 sm:mb-3 hover:text-neutral-300 transition break-words flex items-start leading-snug">
-                            <span className="flex-1">{post.title}</span>
-                            {post.link && (
-                              <ExternalLink
-                                size={14}
-                                className="ml-2 text-neutral-600 flex-shrink-0 mt-1"
-                              />
-                            )}
-                          </h3>
-                          <p className="text-neutral-400 text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed break-words line-clamp-3">
-                            {post.excerpt}
-                          </p>
-                        </div>
-
-                        {/* Post Actions */}
-                        <div
-                          className="flex items-center space-x-4 sm:space-x-6 text-xs sm:text-sm text-neutral-500"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            onClick={() => handleInteraction("like posts")}
-                            className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
-                          >
-                            <Star size={14} strokeWidth={1.5} />
-                            <span>{post.likes}</span>
-                          </button>
-                          <button
-                            onClick={() => handleInteraction("comment")}
-                            className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
-                          >
-                            <MessageCircle size={14} strokeWidth={1.5} />
-                            <span>{post.comments}</span>
-                          </button>
-                          <button
-                            onClick={() => handleInteraction("bookmark")}
-                            className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
-                          >
-                            <Bookmark size={14} strokeWidth={1.5} />
-                            <span className="hidden sm:inline">Save</span>
-                          </button>
-                        </div>
-                      </article>
-                    ) : (
-                      // Internal posts - use Link for smooth navigation
-                      <Link key={post.id} href={`/dashboard/posts/${post.id}`}>
-                        <article className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 sm:p-6 hover:border-neutral-700 transition cursor-pointer">
-                          {/* Post Header */}
-                          <div className="flex items-start space-x-3 mb-3 sm:mb-4">
-                            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
+                      <div className="p-6">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-start space-x-3 flex-1 min-w-0">
+                            <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
                               {post.avatar}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -643,35 +503,130 @@ export default function SMLDashboard() {
                                 <span className="whitespace-nowrap">
                                   {post.timestamp}
                                 </span>
-                                <span className="hidden sm:inline">·</span>
+                                <span>·</span>
                                 <span className="flex items-center whitespace-nowrap">
                                   <Clock
-                                    size={11}
+                                    size={12}
                                     className="mr-1"
                                     strokeWidth={1.5}
                                   />
                                   {post.readTime}
                                 </span>
+                                {post.source && (
+                                  <>
+                                    <span>·</span>
+                                    <span className="text-neutral-500 whitespace-nowrap">
+                                      {post.source}
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </div>
-                            <span className="px-2 sm:px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap flex-shrink-0">
+                          </div>
+                          <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-3">
+                            {post.genre}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words leading-snug flex items-start">
+                            <span className="flex-1">{post.title}</span>
+                            {post.link && (
+                              <ExternalLink
+                                size={16}
+                                className="ml-2 text-neutral-600 flex-shrink-0 mt-1"
+                              />
+                            )}
+                          </h3>
+                          <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
+                            {post.excerpt}
+                          </p>
+                        </div>
+
+                        <div
+                          className="flex items-center space-x-6 text-sm text-neutral-500"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => handleInteraction("like posts")}
+                            className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                          >
+                            <Star size={16} strokeWidth={1.5} />
+                            <span>{post.likes}</span>
+                          </button>
+                          <button
+                            onClick={() => handleInteraction("comment")}
+                            className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                          >
+                            <MessageCircle size={16} strokeWidth={1.5} />
+                            <span>{post.comments}</span>
+                          </button>
+                          <button
+                            onClick={() => handleInteraction("bookmark")}
+                            className="flex items-center space-x-2 hover:text-neutral-300 transition"
+                          >
+                            <Bookmark size={16} strokeWidth={1.5} />
+                            <span>Save</span>
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ) : (
+                    <Link key={post.id} href={`/dashboard/posts/${post.id}`}>
+                      <article className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all cursor-pointer">
+                        {post.cover_image_url && (
+                          <div className="relative w-full h-48 sm:h-64">
+                            <Image
+                              src={post.cover_image_url}
+                              alt={post.cover_image_caption || post.title}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        )}
+
+                        <div className="p-6">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-start space-x-3 flex-1 min-w-0">
+                              <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
+                                {post.avatar}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-neutral-300 text-sm truncate">
+                                  {post.author}
+                                </p>
+                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
+                                  <span className="whitespace-nowrap">
+                                    {post.timestamp}
+                                  </span>
+                                  <span>·</span>
+                                  <span className="flex items-center whitespace-nowrap">
+                                    <Clock
+                                      size={12}
+                                      className="mr-1"
+                                      strokeWidth={1.5}
+                                    />
+                                    {post.readTime}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-3">
                               {post.genre}
                             </span>
                           </div>
 
-                          {/* Post Content */}
                           <div>
-                            <h3 className="text-base sm:text-xl font-serif text-neutral-100 mb-2 sm:mb-3 hover:text-neutral-300 transition break-words leading-snug">
+                            <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words leading-snug">
                               {post.title}
                             </h3>
-                            <p className="text-neutral-400 text-xs sm:text-sm mb-3 sm:mb-4 leading-relaxed break-words line-clamp-3">
+                            <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
                               {post.excerpt}
                             </p>
                           </div>
 
-                          {/* Post Actions */}
                           <div
-                            className="flex items-center space-x-4 sm:space-x-6 text-xs sm:text-sm text-neutral-500"
+                            className="flex items-center space-x-6 text-sm text-neutral-500"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <button
@@ -679,9 +634,9 @@ export default function SMLDashboard() {
                                 e.preventDefault();
                                 handleInteraction("like posts");
                               }}
-                              className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
+                              className="flex items-center space-x-2 hover:text-neutral-300 transition"
                             >
-                              <Star size={14} strokeWidth={1.5} />
+                              <Star size={16} strokeWidth={1.5} />
                               <span>{post.likes}</span>
                             </button>
                             <button
@@ -689,9 +644,9 @@ export default function SMLDashboard() {
                                 e.preventDefault();
                                 handleInteraction("comment");
                               }}
-                              className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
+                              className="flex items-center space-x-2 hover:text-neutral-300 transition"
                             >
-                              <MessageCircle size={14} strokeWidth={1.5} />
+                              <MessageCircle size={16} strokeWidth={1.5} />
                               <span>{post.comments}</span>
                             </button>
                             <button
@@ -699,29 +654,28 @@ export default function SMLDashboard() {
                                 e.preventDefault();
                                 handleInteraction("bookmark");
                               }}
-                              className="flex items-center space-x-1.5 hover:text-neutral-300 transition"
+                              className="flex items-center space-x-2 hover:text-neutral-300 transition"
                             >
-                              <Bookmark size={14} strokeWidth={1.5} />
-                              <span className="hidden sm:inline">Save</span>
+                              <Bookmark size={16} strokeWidth={1.5} />
+                              <span>Save</span>
                             </button>
                           </div>
-                        </article>
-                      </Link>
-                    )
+                        </div>
+                      </article>
+                    </Link>
                   )
                 )}
               </div>
 
-              {/* Infinite Scroll Trigger & Loading Indicator */}
               {feedPosts.length > 0 && hasMore && (
-                <div ref={observerTarget} className="py-6 sm:py-8">
+                <div ref={observerTarget} className="py-8">
                   {isLoadingMore && (
                     <div className="flex flex-col items-center justify-center">
                       <Loader
                         className="animate-spin text-neutral-600 mb-2"
-                        size={28}
+                        size={32}
                       />
-                      <p className="text-neutral-500 text-xs sm:text-sm">
+                      <p className="text-neutral-500 text-sm">
                         Loading more posts...
                       </p>
                     </div>
@@ -729,7 +683,6 @@ export default function SMLDashboard() {
                 </div>
               )}
 
-              {/* End of feed message */}
               {!hasMore && feedPosts.length > 0 && (
                 <div className="text-center py-8 text-neutral-600 text-sm">
                   <p>You've reached the end of your feed</p>
