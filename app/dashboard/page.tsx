@@ -98,9 +98,10 @@ export default function SMLDashboard() {
     return name.substring(0, 2).toUpperCase();
   };
 
+  // FIXED: Changed endpoint to /interactions
   const fetchPostInteractionStatus = async (postId: string) => {
     try {
-      const response = await fetch(`/api/posts/${postId}`, {
+      const response = await fetch(`/api/posts/${postId}/interactions`, {
         credentials: "include",
       });
       if (response.ok) {
@@ -117,6 +118,7 @@ export default function SMLDashboard() {
     return null;
   };
 
+  // IMPROVED: Added refetch after successful toggle
   const handleLike = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -124,6 +126,7 @@ export default function SMLDashboard() {
     const currentState = postInteractions[postId];
     const newLiked = !currentState?.liked;
 
+    // Optimistic update
     setPostInteractions((prev) => ({
       ...prev,
       [postId]: {
@@ -131,7 +134,7 @@ export default function SMLDashboard() {
         liked: newLiked,
         likeCount: newLiked
           ? (prev[postId]?.likeCount || 0) + 1
-          : (prev[postId]?.likeCount || 0) - 1,
+          : Math.max((prev[postId]?.likeCount || 0) - 1, 0),
       },
     }));
 
@@ -142,13 +145,24 @@ export default function SMLDashboard() {
       });
 
       if (!response.ok) {
+        // Revert on error
         setPostInteractions((prev) => ({
           ...prev,
           [postId]: currentState,
         }));
+      } else {
+        // Refetch to ensure accurate count
+        const status = await fetchPostInteractionStatus(postId);
+        if (status) {
+          setPostInteractions((prev) => ({
+            ...prev,
+            [postId]: status,
+          }));
+        }
       }
     } catch (error) {
       console.error("Error toggling like:", error);
+      // Revert on error
       setPostInteractions((prev) => ({
         ...prev,
         [postId]: currentState,
@@ -163,6 +177,7 @@ export default function SMLDashboard() {
     const currentState = postInteractions[postId];
     const newBookmarked = !currentState?.bookmarked;
 
+    // Optimistic update
     setPostInteractions((prev) => ({
       ...prev,
       [postId]: {
@@ -178,6 +193,7 @@ export default function SMLDashboard() {
       });
 
       if (!response.ok) {
+        // Revert on error
         setPostInteractions((prev) => ({
           ...prev,
           [postId]: currentState,
@@ -185,6 +201,7 @@ export default function SMLDashboard() {
       }
     } catch (error) {
       console.error("Error toggling bookmark:", error);
+      // Revert on error
       setPostInteractions((prev) => ({
         ...prev,
         [postId]: currentState,
@@ -672,8 +689,8 @@ export default function SMLDashboard() {
                                 onClick={(e) => handleLike(post.id, e)}
                                 className={`flex items-center space-x-2 transition ${
                                   postInteractions[post.id]?.liked
-                                    ? "text-red-400"
-                                    : "hover:text-neutral-300"
+                                    ? "text-red-500"
+                                    : "hover:text-red-400"
                                 }`}
                               >
                                 <Heart
@@ -704,8 +721,8 @@ export default function SMLDashboard() {
                                 onClick={(e) => handleBookmark(post.id, e)}
                                 className={`flex items-center space-x-2 transition ${
                                   postInteractions[post.id]?.bookmarked
-                                    ? "text-neutral-200"
-                                    : "hover:text-neutral-300"
+                                    ? "text-yellow-500"
+                                    : "hover:text-yellow-400"
                                 }`}
                               >
                                 <Bookmark
