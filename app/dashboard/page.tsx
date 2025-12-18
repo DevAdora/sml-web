@@ -98,10 +98,10 @@ export default function SMLDashboard() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // FIXED: Changed endpoint to /interactions
+  // Fetch interaction status - same as post detail page
   const fetchPostInteractionStatus = async (postId: string) => {
     try {
-      const response = await fetch(`/api/posts/${postId}/interactions`, {
+      const response = await fetch(`/api/posts/${postId}`, {
         credentials: "include",
       });
       if (response.ok) {
@@ -118,7 +118,7 @@ export default function SMLDashboard() {
     return null;
   };
 
-  // IMPROVED: Added refetch after successful toggle
+  // Handle like - same logic as post detail page
   const handleLike = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -151,12 +151,12 @@ export default function SMLDashboard() {
           [postId]: currentState,
         }));
       } else {
-        // Refetch to ensure accurate count
-        const status = await fetchPostInteractionStatus(postId);
-        if (status) {
+        // Refetch to get accurate state
+        const updatedStatus = await fetchPostInteractionStatus(postId);
+        if (updatedStatus) {
           setPostInteractions((prev) => ({
             ...prev,
-            [postId]: status,
+            [postId]: updatedStatus,
           }));
         }
       }
@@ -170,6 +170,7 @@ export default function SMLDashboard() {
     }
   };
 
+  // Handle bookmark - same logic as post detail page
   const handleBookmark = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -198,6 +199,15 @@ export default function SMLDashboard() {
           ...prev,
           [postId]: currentState,
         }));
+      } else {
+        // Refetch to get accurate state
+        const updatedStatus = await fetchPostInteractionStatus(postId);
+        if (updatedStatus) {
+          setPostInteractions((prev) => ({
+            ...prev,
+            [postId]: updatedStatus,
+          }));
+        }
       }
     } catch (error) {
       console.error("Error toggling bookmark:", error);
@@ -326,18 +336,17 @@ export default function SMLDashboard() {
           cover_image_caption: post.cover_image_caption || null,
         }));
 
-        if (user) {
-          const interactions: typeof postInteractions = {};
-          await Promise.all(
-            internalPosts.map(async (post) => {
-              const status = await fetchPostInteractionStatus(post.id);
-              if (status) {
-                interactions[post.id] = status;
-              }
-            })
-          );
-          setPostInteractions((prev) => ({ ...prev, ...interactions }));
-        }
+        // Fetch interactions for all posts (matching post detail logic)
+        const interactions: typeof postInteractions = {};
+        await Promise.all(
+          internalPosts.map(async (post) => {
+            const status = await fetchPostInteractionStatus(post.id);
+            if (status) {
+              interactions[post.id] = status;
+            }
+          })
+        );
+        setPostInteractions((prev) => ({ ...prev, ...interactions }));
 
         return {
           posts: internalPosts,
@@ -375,7 +384,7 @@ export default function SMLDashboard() {
     };
 
     fetchInitialData();
-  }, [user]);
+  }, []);
 
   const loadMorePosts = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
@@ -394,7 +403,7 @@ export default function SMLDashboard() {
     }
 
     setIsLoadingMore(false);
-  }, [page, isLoadingMore, hasMore, user]);
+  }, [page, isLoadingMore, hasMore]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -704,7 +713,7 @@ export default function SMLDashboard() {
                                 />
                                 <span>
                                   {postInteractions[post.id]?.likeCount ??
-                                    post.likes}
+                                    post.likes_count}
                                 </span>
                               </button>
                               <button
@@ -715,7 +724,7 @@ export default function SMLDashboard() {
                                 className="flex items-center space-x-2 hover:text-neutral-300 transition"
                               >
                                 <MessageCircle size={16} strokeWidth={1.5} />
-                                <span>{post.comments}</span>
+                                <span>{post.comments_count}</span>
                               </button>
                               <button
                                 onClick={(e) => handleBookmark(post.id, e)}

@@ -48,7 +48,6 @@ export default function PostDetailPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [user, setUser] = useState<any>(null);
 
-  // Dummy data for sidebars
   const trendingBooks: any[] = [];
   const internalTrending = [
     { tag: "literary-fiction", posts: "2.3k", growth: "+12%" },
@@ -88,7 +87,6 @@ export default function PostDetailPage() {
     fetchPost();
   }, [postId]);
 
-  // Fetch user for authentication checks
   useEffect(() => {
     const fetchUser = async () => {
       try {
