@@ -1,4 +1,3 @@
-// app/api/posts/[id]/interactions/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
@@ -29,11 +28,9 @@ export async function GET(
             }
         );
 
-        // Get authenticated user
         const { data: authData } = await supabase.auth.getUser();
         const userId = authData?.user?.id;
 
-        // Get post data with counts
         const { data: post, error: postError } = await supabase
             .schema("sml")
             .from("posts")
@@ -51,9 +48,7 @@ export async function GET(
         let userLiked = false;
         let userBookmarked = false;
 
-        // Check user interactions if authenticated
         if (userId) {
-            // Check if user liked this post
             const { data: likeData } = await supabase
                 .schema("sml")
                 .from("post_likes")
@@ -64,7 +59,6 @@ export async function GET(
 
             userLiked = !!likeData;
 
-            // Check if user bookmarked this post
             const { data: bookmarkData } = await supabase
                 .schema("sml")
                 .from("post_saves")
