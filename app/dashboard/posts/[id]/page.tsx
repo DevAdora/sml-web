@@ -15,47 +15,7 @@ import {
 } from "lucide-react";
 import LeftSidebar from "@/app/components/Sidebar";
 import { RightSidebar } from "@/app/components/TrendingBar";
-
-interface PostData {
-  id: string;
-  title: string;
-  content: string;
-  excerpt: string;
-  genre: string;
-  read_time: number;
-  created_at: string;
-  author: string;
-  author_id: string;
-  avatar_url: string | null;
-  likes_count: number;
-  comments_count: number;
-  user_liked: boolean;
-  user_bookmarked: boolean;
-  tags: string[];
-  cover_image_url?: string | null;
-  cover_image_caption?: string | null;
-}
-interface CommentData {
-  id: string;
-  post_id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
-  updated_at?: string | null;
-  parent_id?: string | null;
-  author: string;
-  avatar_url: string | null;
-  can_edit: boolean;
-}
-
-interface CommentsResponse {
-  comments: CommentData[];
-  page: number;
-  limit: number;
-  total: number;
-  has_more: boolean;
-}
-
+import { CommentsResponse, PostData, CommentData } from "../../../types/types";
 export default function PostDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -79,7 +39,7 @@ export default function PostDetailPage() {
 
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
-  const [commentActionId, setCommentActionId] = useState<string | null>(null); // disable buttons while act
+  const [commentActionId, setCommentActionId] = useState<string | null>(null);
 
   const trendingBooks: any[] = [];
   const internalTrending = [
@@ -172,12 +132,10 @@ export default function PostDetailPage() {
     fetchComments(1, false);
   }, [postId]);
 
-  
   const refreshComments = async () => {
     await fetchComments(1, false);
   };
 
-  
   const handleAddComment = async () => {
     if (!user) {
       alert("Please sign in to comment");

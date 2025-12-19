@@ -59,8 +59,7 @@ export interface NavItem {
   href: string;
 
 }
-
-interface PostData {
+export interface PostData {
   id: string;
   title: string;
   content: string;
@@ -78,4 +77,24 @@ interface PostData {
   tags: string[];
   cover_image_url?: string | null;
   cover_image_caption?: string | null;
+}
+export interface CommentData {
+  id: string;
+  post_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at?: string | null;
+  parent_id?: string | null;
+  author: string;
+  avatar_url: string | null;
+  can_edit: boolean;
+}
+
+export interface CommentsResponse {
+  comments: CommentData[];
+  page: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
 }
