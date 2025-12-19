@@ -35,6 +35,26 @@ interface PostData {
   cover_image_url?: string | null;
   cover_image_caption?: string | null;
 }
+interface CommentData {
+  id: string;
+  post_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at?: string | null;
+  parent_id?: string | null;
+  author: string;
+  avatar_url: string | null;
+  can_edit: boolean;
+}
+
+interface CommentsResponse {
+  comments: CommentData[];
+  page: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
+}
 
 export default function PostDetailPage() {
   const router = useRouter();
@@ -47,6 +67,19 @@ export default function PostDetailPage() {
   const [bookmarked, setBookmarked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [user, setUser] = useState<any>(null);
+
+  const [comments, setComments] = useState<CommentData[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [commentsPage, setCommentsPage] = useState(1);
+  const [commentsHasMore, setCommentsHasMore] = useState(false);
+
+  const [newComment, setNewComment] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [commentActionId, setCommentActionId] = useState<string | null>(null); // disable buttons while act
 
   const trendingBooks: any[] = [];
   const internalTrending = [
@@ -106,6 +139,184 @@ export default function PostDetailPage() {
     };
     fetchUser();
   }, []);
+
+  const fetchComments = async (page = 1, append = false) => {
+    setCommentsLoading(true);
+    setCommentsError(null);
+
+    try {
+      const res = await fetch(
+        `/api/posts/${postId}/comments?page=${page}&limit=20`,
+        { credentials: "include" }
+      );
+
+      if (!res.ok) throw new Error("Failed to fetch comments");
+
+      const data: CommentsResponse = await res.json();
+
+      setComments((prev) =>
+        append ? [...prev, ...data.comments] : data.comments
+      );
+      setCommentsPage(data.page);
+      setCommentsHasMore(data.has_more);
+    } catch (e: any) {
+      console.error(e);
+      setCommentsError(e?.message || "Failed to fetch comments");
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!postId) return;
+    fetchComments(1, false);
+  }, [postId]);
+
+  
+  const refreshComments = async () => {
+    await fetchComments(1, false);
+  };
+
+  
+  const handleAddComment = async () => {
+    if (!user) {
+      alert("Please sign in to comment");
+      return;
+    }
+
+    const content = newComment.trim();
+    if (!content) return;
+
+    setSubmittingComment(true);
+
+    const tempId = `temp_${Date.now()}`;
+    const optimistic: CommentData = {
+      id: tempId,
+      post_id: postId,
+      user_id: user?.user?.id || user?.id || "me",
+      content,
+      created_at: new Date().toISOString(),
+      updated_at: null,
+      parent_id: null,
+      author: user?.user?.user_metadata?.full_name || user?.full_name || "You",
+      avatar_url: null,
+      can_edit: true,
+    };
+
+    setComments((prev) => [optimistic, ...prev]);
+    setNewComment("");
+
+    try {
+      const res = await fetch(`/api/posts/${postId}/comments`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create comment");
+
+      const created = await res.json();
+
+      setComments((prev) => prev.map((c) => (c.id === tempId ? created : c)));
+
+      setPost((prev) =>
+        prev
+          ? { ...prev, comments_count: (prev.comments_count || 0) + 1 }
+          : prev
+      );
+    } catch (e) {
+      console.error(e);
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setNewComment(content);
+      alert("Could not post comment.");
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const startEditComment = (comment: CommentData) => {
+    setEditingCommentId(comment.id);
+    setEditingValue(comment.content);
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingValue("");
+  };
+
+  const saveEditComment = async (commentId: string) => {
+    const content = editingValue.trim();
+    if (!content) return;
+
+    setCommentActionId(commentId);
+
+    // optimistic update
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, content, updated_at: new Date().toISOString() }
+          : c
+      )
+    );
+
+    try {
+      const res = await fetch(`/api/posts/${postId}/comments/${commentId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update comment");
+
+      const updated = await res.json();
+
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, ...updated } : c))
+      );
+      cancelEditComment();
+    } catch (e) {
+      console.error(e);
+      alert("Could not update comment.");
+      await refreshComments(); // safest rollback
+    } finally {
+      setCommentActionId(null);
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!confirm("Delete this comment?")) return;
+
+    setCommentActionId(commentId);
+
+    const prevComments = comments;
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+
+    try {
+      const res = await fetch(`/api/posts/${postId}/comments/${commentId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete comment");
+
+      setPost((prev) =>
+        prev
+          ? {
+              ...prev,
+              comments_count: Math.max(0, (prev.comments_count || 0) - 1),
+            }
+          : prev
+      );
+    } catch (e) {
+      console.error(e);
+      setComments(prevComments); // rollback
+      alert("Could not delete comment.");
+    } finally {
+      setCommentActionId(null);
+    }
+  };
 
   const handleLike = async () => {
     if (!user) {
@@ -404,13 +615,190 @@ export default function PostDetailPage() {
             <h3 className="text-xl font-serif text-neutral-200 mb-6">
               Comments ({post.comments_count})
             </h3>
-            <div className="text-center py-8 text-neutral-500">
-              <MessageCircle
-                size={48}
-                className="mx-auto mb-4 text-neutral-700"
-                strokeWidth={1}
-              />
-              <p className="text-sm">Comments coming soon...</p>
+            {/* Add comment */}
+            <div className="mb-6">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 font-medium text-xs">
+                  {user?.user?.user_metadata?.full_name
+                    ? generateAvatar(user.user.user_metadata.full_name)
+                    : user
+                    ? "ME"
+                    : "??"}
+                </div>
+
+                <div className="flex-1">
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder={
+                      user ? "Write a comment..." : "Sign in to write a comment"
+                    }
+                    disabled={!user || submittingComment}
+                    rows={3}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-neutral-700 resize-none"
+                  />
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <p className="text-xs text-neutral-500">
+                      {newComment.length > 5000
+                        ? "Too long (max 5000 chars)"
+                        : " "}
+                    </p>
+
+                    <button
+                      onClick={handleAddComment}
+                      disabled={
+                        !user ||
+                        submittingComment ||
+                        !newComment.trim() ||
+                        newComment.length > 5000
+                      }
+                      className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:hover:bg-neutral-800 text-neutral-200 rounded-lg text-sm font-medium transition border border-neutral-700"
+                    >
+                      {submittingComment ? "Posting..." : "Post"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Comments list */}
+            {commentsLoading && comments.length === 0 ? (
+              <div className="flex items-center justify-center py-10 text-neutral-500">
+                <Loader className="animate-spin mr-2" size={18} />
+                <span className="text-sm">Loading comments...</span>
+              </div>
+            ) : commentsError ? (
+              <div className="py-6 text-sm text-red-400">
+                {commentsError}
+                <button
+                  onClick={refreshComments}
+                  className="ml-3 text-neutral-300 hover:text-neutral-200 underline underline-offset-4"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : comments.length === 0 ? (
+              <div className="text-center py-10 text-neutral-500">
+                <MessageCircle
+                  size={42}
+                  className="mx-auto mb-3 text-neutral-700"
+                  strokeWidth={1}
+                />
+                <p className="text-sm">Be the first to comment.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {comments.map((c) => (
+                  <div
+                    key={c.id}
+                    className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 font-medium text-xs overflow-hidden">
+                          {c.avatar_url ? (
+                            // optional: if you want real avatar images later
+                            <span>{generateAvatar(c.author)}</span>
+                          ) : (
+                            <span>{generateAvatar(c.author)}</span>
+                          )}
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-neutral-200 font-medium">
+                              {c.author}
+                            </p>
+                            <span className="text-xs text-neutral-600">·</span>
+                            <p className="text-xs text-neutral-500">
+                              {getRelativeTime(c.created_at)}
+                              {c.updated_at ? " (edited)" : ""}
+                            </p>
+                          </div>
+
+                          {editingCommentId === c.id ? (
+                            <div className="mt-3">
+                              <textarea
+                                value={editingValue}
+                                onChange={(e) =>
+                                  setEditingValue(e.target.value)
+                                }
+                                rows={3}
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-neutral-700 resize-none"
+                              />
+                              <div className="mt-3 flex items-center gap-2">
+                                <button
+                                  onClick={() => saveEditComment(c.id)}
+                                  disabled={
+                                    commentActionId === c.id ||
+                                    !editingValue.trim()
+                                  }
+                                  className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-neutral-200 rounded-lg text-sm font-medium transition border border-neutral-700"
+                                >
+                                  {commentActionId === c.id
+                                    ? "Saving..."
+                                    : "Save"}
+                                </button>
+                                <button
+                                  onClick={cancelEditComment}
+                                  disabled={commentActionId === c.id}
+                                  className="px-3 py-2 bg-transparent hover:bg-neutral-900 text-neutral-300 rounded-lg text-sm font-medium transition border border-neutral-800"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-sm text-neutral-300 whitespace-pre-wrap">
+                              {c.content}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {c.can_edit && (
+                        <div className="flex items-center gap-2">
+                          {editingCommentId !== c.id && (
+                            <button
+                              onClick={() => startEditComment(c)}
+                              disabled={commentActionId === c.id}
+                              className="text-xs px-3 py-2 rounded-lg border border-neutral-800 hover:bg-neutral-900 text-neutral-300 transition disabled:opacity-50"
+                            >
+                              Edit
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteComment(c.id)}
+                            disabled={commentActionId === c.id}
+                            className="text-xs px-3 py-2 rounded-lg border border-neutral-800 hover:bg-neutral-900 text-red-300 transition disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Load more */}
+            <div className="mt-6 flex justify-center">
+              {commentsHasMore && !commentsLoading && (
+                <button
+                  onClick={() => fetchComments(commentsPage + 1, true)}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-sm font-medium transition border border-neutral-700"
+                >
+                  Load more
+                </button>
+              )}
+              {commentsLoading && comments.length > 0 && (
+                <div className="flex items-center text-neutral-500 text-sm">
+                  <Loader className="animate-spin mr-2" size={16} />
+                  Loading...
+                </div>
+              )}
             </div>
           </div>
         </div>
