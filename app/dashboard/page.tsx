@@ -100,25 +100,15 @@ export default function SMLDashboard() {
 
   const fetchPostInteractionStatus = async (postId: string) => {
     try {
-      console.log(`[FETCH INTERACTION] Starting fetch for post ${postId}`);
 
       const response = await fetch(`/api/posts/${postId}`, {
         credentials: "include",
       });
 
-      console.log(`[FETCH INTERACTION] Response status: ${response.status}`);
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`[FETCH INTERACTION] Full response for ${postId}:`, data);
-        console.log(
-          `[FETCH INTERACTION] Extracted interaction for ${postId}:`,
-          {
-            liked: data.user_liked,
-            bookmarked: data.user_bookmarked,
-            likeCount: data.likes_count,
-          }
-        );
+      
 
         return {
           liked: data.user_liked || false,
@@ -146,10 +136,6 @@ export default function SMLDashboard() {
     const currentState = postInteractions[postId];
     const newLiked = !currentState?.liked;
 
-    console.log(
-      `Like clicked for ${postId}. Current: ${currentState?.liked}, New: ${newLiked}`
-    );
-
     setPostInteractions((prev) => ({
       ...prev,
       [postId]: {
@@ -174,7 +160,6 @@ export default function SMLDashboard() {
           [postId]: currentState,
         }));
       } else {
-        console.log("Like API success, refetching status...");
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         const updatedStatus = await fetchPostInteractionStatus(postId);
@@ -204,10 +189,6 @@ export default function SMLDashboard() {
     const currentState = postInteractions[postId];
     const newBookmarked = !currentState?.bookmarked;
 
-    console.log(`[BOOKMARK CLICK] Post: ${postId}`);
-    console.log(`[BOOKMARK CLICK] Current state:`, currentState);
-    console.log(`[BOOKMARK CLICK] New bookmarked state: ${newBookmarked}`);
-
     setPostInteractions((prev) => ({
       ...prev,
       [postId]: {
@@ -221,40 +202,28 @@ export default function SMLDashboard() {
       const url = `/api/posts/${postId}/bookmark`;
       const method = newBookmarked ? "POST" : "DELETE";
 
-      console.log(`[BOOKMARK API] Calling ${method} ${url}`);
 
       const response = await fetch(url, {
         method: method,
         credentials: "include",
       });
 
-      const responseData = await response.json();
-      console.log(
-        `[BOOKMARK API] Response (${response.status}):`,
-        responseData
-      );
-
       if (!response.ok) {
         console.error(`[BOOKMARK API] Failed with status ${response.status}`);
-        // Revert on failure
         setPostInteractions((prev) => ({
           ...prev,
           [postId]: currentState,
         }));
       } else {
-        console.log(`[BOOKMARK API] Success! Waiting 100ms before refetch...`);
         await new Promise((resolve) => setTimeout(resolve, 100));
 
-        console.log(`[BOOKMARK API] Refetching interaction status...`);
         const updatedStatus = await fetchPostInteractionStatus(postId);
 
         if (updatedStatus) {
-          console.log(`[BOOKMARK API] Updated status received:`, updatedStatus);
           setPostInteractions((prev) => ({
             ...prev,
             [postId]: updatedStatus,
           }));
-          console.log(`[BOOKMARK API] State updated successfully`);
         } else {
           console.error(`[BOOKMARK API] Failed to get updated status`);
         }
@@ -387,9 +356,7 @@ export default function SMLDashboard() {
           cover_image_caption: post.cover_image_caption || null,
         }));
 
-        console.log(
-          `Fetching interactions for ${internalPosts.length} posts...`
-        );
+   
 
         const interactions: typeof postInteractions = {};
         await Promise.all(
@@ -399,11 +366,6 @@ export default function SMLDashboard() {
               interactions[post.id] = status;
             }
           })
-        );
-
-        console.log(
-          "Fetched interactions:",
-          JSON.stringify(interactions, null, 2)
         );
         setPostInteractions((prev) => ({ ...prev, ...interactions }));
 

@@ -70,7 +70,7 @@ export async function GET(
 
         const { count: commentsCount } = await supabase
             .schema("sml")
-            .from("post_comments")
+            .from("comments")
             .select("*", { count: "exact", head: true })
             .eq("post_id", postId);
 

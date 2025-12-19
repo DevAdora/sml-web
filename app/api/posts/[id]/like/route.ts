@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-// Like a post
 export async function POST(
     request: Request,
     context: { params: Promise<{ id: string }> }
 ) {
     try {
-        // Next.js 15: await params
         const params = await context.params;
         const cookieStore = await cookies();
         const postId = params.id;
@@ -41,7 +39,6 @@ export async function POST(
 
         const userId = authData.user.id;
 
-        // Insert like
         const { error: likeError } = await supabase
             .schema("sml")
             .from("post_likes")
@@ -51,7 +48,6 @@ export async function POST(
             });
 
         if (likeError) {
-            // Check if it's a duplicate error
             if (likeError.code === "23505") {
                 return NextResponse.json(
                     { message: "Already liked" },
@@ -71,13 +67,11 @@ export async function POST(
     }
 }
 
-// Unlike a post
 export async function DELETE(
     request: Request,
     context: { params: Promise<{ id: string }> }
 ) {
     try {
-        // Next.js 15: await params
         const params = await context.params;
         const cookieStore = await cookies();
         const postId = params.id;
@@ -110,7 +104,6 @@ export async function DELETE(
 
         const userId = authData.user.id;
 
-        // Delete like
         const { error: deleteError } = await supabase
             .schema("sml")
             .from("post_likes")
