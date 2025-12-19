@@ -100,24 +100,41 @@ export default function SMLDashboard() {
 
   const fetchPostInteractionStatus = async (postId: string) => {
     try {
+      console.log(`[FETCH INTERACTION] Starting fetch for post ${postId}`);
+
       const response = await fetch(`/api/posts/${postId}`, {
         credentials: "include",
       });
+
+      console.log(`[FETCH INTERACTION] Response status: ${response.status}`);
+
       if (response.ok) {
         const data = await response.json();
-        console.log(`Fetched interaction for ${postId}:`, {
-          liked: data.user_liked,
-          bookmarked: data.user_bookmarked,
-          likeCount: data.likes_count,
-        });
+        console.log(`[FETCH INTERACTION] Full response for ${postId}:`, data);
+        console.log(
+          `[FETCH INTERACTION] Extracted interaction for ${postId}:`,
+          {
+            liked: data.user_liked,
+            bookmarked: data.user_bookmarked,
+            likeCount: data.likes_count,
+          }
+        );
+
         return {
           liked: data.user_liked || false,
           bookmarked: data.user_bookmarked || false,
           likeCount: data.likes_count || 0,
         };
+      } else {
+        console.error(
+          `[FETCH INTERACTION] Failed to fetch, status: ${response.status}`
+        );
       }
     } catch (error) {
-      console.error("Error fetching post interaction status:", error);
+      console.error(
+        `[FETCH INTERACTION] Error fetching post ${postId}:`,
+        error
+      );
     }
     return null;
   };
@@ -178,6 +195,8 @@ export default function SMLDashboard() {
     }
   };
 
+  
+
   const handleBookmark = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -185,11 +204,9 @@ export default function SMLDashboard() {
     const currentState = postInteractions[postId];
     const newBookmarked = !currentState?.bookmarked;
 
-    console.log(
-      `Bookmark clicked for ${postId}. Current state:`,
-      currentState,
-      `New bookmarked: ${newBookmarked}`
-    );
+    console.log(`[BOOKMARK CLICK] Post: ${postId}`);
+    console.log(`[BOOKMARK CLICK] Current state:`, currentState);
+    console.log(`[BOOKMARK CLICK] New bookmarked state: ${newBookmarked}`);
 
     setPostInteractions((prev) => ({
       ...prev,
@@ -201,38 +218,49 @@ export default function SMLDashboard() {
     }));
 
     try {
-      const response = await fetch(`/api/posts/${postId}/bookmark`, {
-        method: newBookmarked ? "POST" : "DELETE",
+      const url = `/api/posts/${postId}/bookmark`;
+      const method = newBookmarked ? "POST" : "DELETE";
+
+      console.log(`[BOOKMARK API] Calling ${method} ${url}`);
+
+      const response = await fetch(url, {
+        method: method,
         credentials: "include",
       });
 
       const responseData = await response.json();
-      console.log("Bookmark API response:", responseData);
+      console.log(
+        `[BOOKMARK API] Response (${response.status}):`,
+        responseData
+      );
 
       if (!response.ok) {
-        console.error("Bookmark API failed");
+        console.error(`[BOOKMARK API] Failed with status ${response.status}`);
+        // Revert on failure
         setPostInteractions((prev) => ({
           ...prev,
           [postId]: currentState,
         }));
       } else {
-        console.log("Bookmark API success, refetching status...");
+        console.log(`[BOOKMARK API] Success! Waiting 100ms before refetch...`);
         await new Promise((resolve) => setTimeout(resolve, 100));
 
+        console.log(`[BOOKMARK API] Refetching interaction status...`);
         const updatedStatus = await fetchPostInteractionStatus(postId);
+
         if (updatedStatus) {
-          console.log(
-            `Updated status after bookmark for ${postId}:`,
-            updatedStatus
-          );
+          console.log(`[BOOKMARK API] Updated status received:`, updatedStatus);
           setPostInteractions((prev) => ({
             ...prev,
             [postId]: updatedStatus,
           }));
+          console.log(`[BOOKMARK API] State updated successfully`);
+        } else {
+          console.error(`[BOOKMARK API] Failed to get updated status`);
         }
       }
     } catch (error) {
-      console.error("Error toggling bookmark:", error);
+      console.error(`[BOOKMARK ERROR] Exception occurred:`, error);
       setPostInteractions((prev) => ({
         ...prev,
         [postId]: currentState,
@@ -252,8 +280,9 @@ export default function SMLDashboard() {
       if (nytData.results && nytData.results.lists) {
         nytData.results.lists.forEach((list: any) => {
           list.books.slice(0, 2).forEach((book: any) => {
+            const postId = `nyt-${book.primary_isbn13}`;
             externalPosts.push({
-              id: `nyt-${book.primary_isbn13}`,
+              id: postId,
               title: `Review: ${book.title}`,
               author: book.author,
               author_id: "nyt-books",
@@ -299,8 +328,9 @@ export default function SMLDashboard() {
 
       if (guardianData.response && guardianData.response.results) {
         guardianData.response.results.forEach((article: any) => {
+          const postId = `guardian-${article.id}`;
           externalPosts.push({
-            id: `guardian-${article.id}`,
+            id: postId,
             title: article.webTitle,
             author: "The Guardian",
             author_id: "guardian",
@@ -660,6 +690,11 @@ export default function SMLDashboard() {
                           <div className="flex items-center space-x-2">
                             <MessageCircle size={16} strokeWidth={1.5} />
                             <span>{post.comments}</span>
+                          </div>
+                          {/* External posts don't support bookmarking */}
+                          <div className="flex items-center space-x-2 text-neutral-600 cursor-not-allowed">
+                            <Bookmark size={16} strokeWidth={1.5} />
+                            <span>External</span>
                           </div>
                         </div>
                       </div>
