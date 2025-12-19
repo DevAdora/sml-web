@@ -1,4 +1,4 @@
-// File location: app/api/posts/[id]/route.ts
+
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -33,7 +33,7 @@ export async function GET(
         const { data: authData } = await supabase.auth.getUser();
         const userId = authData?.user?.id;
 
-        // Fetch the post with all fields including image data
+        // Fetch the post
         const { data: post, error: postError } = await supabase
             .schema("sml")
             .from("posts")
@@ -42,7 +42,6 @@ export async function GET(
             .single();
 
         if (postError || !post) {
-            console.error("Post not found:", postError);
             return NextResponse.json(
                 { error: "Post not found" },
                 { status: 404 }
@@ -62,17 +61,22 @@ export async function GET(
             authorProfile = profile;
         }
 
-        // Get likes count
+        // Get counts
         const { count: likesCount } = await supabase
             .schema("sml")
             .from("post_likes")
             .select("*", { count: "exact", head: true })
             .eq("post_id", postId);
 
-        // Get comments count
         const { count: commentsCount } = await supabase
             .schema("sml")
             .from("post_comments")
+            .select("*", { count: "exact", head: true })
+            .eq("post_id", postId);
+
+        const { count: savesCount } = await supabase
+            .schema("sml")
+            .from("post_saves")
             .select("*", { count: "exact", head: true })
             .eq("post_id", postId);
 
@@ -95,13 +99,13 @@ export async function GET(
         if (userId) {
             const { data: bookmarkData } = await supabase
                 .schema("sml")
-                .from("bookmarks")
+                .from("post_saves")  // ✅ Fixed: was "bookmarks"
                 .select("id")
                 .eq("post_id", postId)
                 .eq("user_id", userId)
                 .maybeSingle();
 
-            userBookmarked = !!bookmarkData;
+            userBookmarked = !!bookmarkData;  // ✅ This handles null properly
         }
 
         // Fetch tags
@@ -111,18 +115,18 @@ export async function GET(
                 .schema("sml")
                 .from("post_tags")
                 .select(`
-          tags (
-            name
-          )
-        `)
+                    tags (
+                        name
+                    )
+                `)
                 .eq("post_id", postId);
 
             tags = tagData?.map((t: any) => t.tags?.name).filter(Boolean) || [];
         } catch (error) {
-            console.log("Tags not available");
+            // Tags table might not exist yet
         }
 
-        // Build response with all data including image fields
+        // Build response
         const response = {
             id: post.id,
             title: post.title,
@@ -136,10 +140,10 @@ export async function GET(
             avatar_url: authorProfile?.avatar_url || null,
             likes_count: likesCount || 0,
             comments_count: commentsCount || 0,
+            saves_count: savesCount || 0,
             user_liked: userLiked,
             user_bookmarked: userBookmarked,
             tags: tags,
-            // NEW: Image fields
             cover_image_url: post.cover_image_url || null,
             cover_image_caption: post.cover_image_caption || null,
         };
