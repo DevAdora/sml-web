@@ -11,7 +11,12 @@ import {
   X,
   TrendingUp,
 } from "lucide-react";
-import { TrendingBook, TrendingTopic, SuggestedWriter } from "@/app/types/types";
+import {
+  TrendingBook,
+  TrendingTopic,
+  SuggestedWriter,
+  SuggestedUser,
+} from "@/app/types/types";
 
 interface RightSidebarProps {
   trendingBooks: TrendingBook[];
@@ -43,6 +48,65 @@ export function RightSidebar({
   const handleBookClick = (link?: string) => {
     if (link) {
       window.open(link, "_blank");
+    }
+  };
+
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  const [loadingSuggested, setLoadingSuggested] = useState(false);
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoadingSuggested(true);
+      try {
+        const res = await fetch("/api/user/suggested?limit=5", {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to load users");
+        const data = await res.json();
+        setSuggestedUsers(data.users || []);
+      } catch (e) {
+        console.error(e);
+        setSuggestedUsers([]);
+      } finally {
+        setLoadingSuggested(false);
+      }
+    };
+    load();
+  }, []);
+
+  const toggleFollow = async (userId: string, currentlyFollowing: boolean) => {
+    setFollowLoadingId(userId);
+
+    setSuggestedUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId ? { ...u, is_following: !currentlyFollowing } : u
+      )
+    );
+
+    try {
+      const res = await fetch(`/api/user/${userId}/follow`, {
+        method: currentlyFollowing ? "DELETE" : "POST",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        setSuggestedUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId ? { ...u, is_following: currentlyFollowing } : u
+          )
+        );
+        if (res.status === 401) alert("Please sign in to follow writers");
+      }
+    } catch (e) {
+      console.error(e);
+      setSuggestedUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, is_following: currentlyFollowing } : u
+        )
+      );
+    } finally {
+      setFollowLoadingId(null);
     }
   };
 
@@ -140,31 +204,65 @@ export function RightSidebar({
           Suggested Writers
         </h3>
         <div className="space-y-3">
-          {suggestedWriters.map((writer, idx) => (
-            <div
-              key={idx}
-              className="p-4 bg-neutral-800/50 border border-neutral-800 rounded-lg"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="font-medium text-neutral-300 text-sm">
-                    {writer.name}
-                  </p>
-                  <p className="text-xs text-neutral-600">{writer.handle}</p>
-                </div>
-                <button
-                  onClick={() => alert("Please sign in to follow writers")}
-                  className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded text-xs font-medium transition"
-                >
-                  Follow
-                </button>
-              </div>
-              <p className="text-xs text-neutral-500">{writer.bio}</p>
-              <p className="text-xs text-neutral-600 mt-2">
-                {writer.followers} followers
-              </p>
+          {loadingSuggested ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader className="animate-spin text-neutral-600" size={20} />
             </div>
-          ))}
+          ) : suggestedUsers.length === 0 ? (
+            <p className="text-xs text-neutral-600">No suggestions yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {suggestedUsers.map((u) => (
+                <div
+                  key={u.id}
+                  className="p-4 bg-neutral-800/50 border border-neutral-800 rounded-lg"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium">
+                        {(u.full_name || "??")
+                          .trim()
+                          .split(" ")
+                          .slice(0, 2)
+                          .map((p) => p[0])
+                          .join("")
+                          .toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-neutral-300 text-sm">
+                          {u.full_name || "Anonymous"}
+                        </p>
+                        <p className="text-xs text-neutral-600">
+                          @
+                          {(u.full_name || "user")
+                            .toLowerCase()
+                            .replace(/\s+/g, "")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => toggleFollow(u.id, u.is_following)}
+                      disabled={followLoadingId === u.id}
+                      className={`px-3 py-1 border rounded text-xs font-medium transition disabled:opacity-50 ${
+                        u.is_following
+                          ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-700 text-neutral-300"
+                          : "bg-neutral-800 hover:bg-neutral-700 border-neutral-700 text-neutral-300"
+                      }`}
+                    >
+                      {followLoadingId === u.id
+                        ? "..."
+                        : u.is_following
+                        ? "Following"
+                        : "Follow"}
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-neutral-500">Reader on SML</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </>
