@@ -98,3 +98,10 @@ export interface CommentsResponse {
   total: number;
   has_more: boolean;
 }
+
+type SuggestedUser = {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  is_following: boolean;
+};

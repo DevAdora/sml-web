@@ -38,6 +38,25 @@ export async function POST(request: Request) {
                 emailRedirectTo: `${new URL(request.url).origin}/auth/callback`,
             },
         });
+        
+        if (data.user) {
+            const userId = data.user.id;
+
+            const { error: profileErr } = await supabase
+                .schema("sml")
+                .from("profiles")
+                .insert({
+                    id: userId,
+                    email,
+                    full_name: String(fullName ?? "").trim() || email.split("@")[0],
+                    bio: "",
+                    avatar_url: null,
+                });
+
+            if (profileErr) {
+                console.error("Profile insert failed:", profileErr);
+            }
+        }
 
         if (error) {
             return NextResponse.json({ ok: false, error: error.message }, { status: 400 });

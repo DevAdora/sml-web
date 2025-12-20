@@ -30,6 +30,7 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Build navItems dynamically based on user state
   const navItems: NavItem[] = [
     {
       id: "feed",
@@ -66,7 +67,7 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
       id: "profile",
       label: "Profile",
       icon: <User size={20} strokeWidth={1.5} />,
-      href: "/dashboard/profile",
+      href: "/dashboard/profile", 
     },
   ];
 
@@ -145,6 +146,10 @@ export default function LeftSidebar({ onSignOut }: LeftSidebarProps) {
   const isActive = (href: string) => {
     if (href === "/dashboard") {
       return pathname === "/dashboard";
+    }
+    // Special handling for profile to match both /dashboard/profile and /dashboard/profile/[id]
+    if (href.startsWith("/dashboard/profile")) {
+      return pathname?.startsWith("/dashboard/profile");
     }
     return pathname?.startsWith(href);
   };

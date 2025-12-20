@@ -1,188 +1,479 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   User,
   Settings,
   MapPin,
   Calendar,
   ExternalLink,
-  BookOpen,
   Edit3,
   Star,
   MessageCircle,
   Bookmark,
-  Users,
-  TrendingUp,
-  Award,
   Target,
   Heart,
+  Loader,
 } from "lucide-react";
 import LeftSidebar from "@/app/components/Sidebar";
 
+type ProfileDTO = {
+  profile: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    bio: string;
+    location: string;
+    website: string;
+    created_at: string;
+  };
+  stats: {
+    reviews: number;
+    followers: number;
+    following: number;
+    readingLists: number;
+  };
+  viewer: {
+    is_following: boolean;
+    is_me: boolean;
+  };
+};
+
+type PostCard = {
+  id: string;
+  title: string;
+  excerpt: string | null;
+  genre: string | null;
+  created_at: string;
+  read_time: number | null;
+  likes_count: number | null;
+  comments_count: number | null;
+};
+
+type PagedPostsResponse = {
+  posts: PostCard[];
+  page: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
+};
+
 export default function ProfilePage() {
+  const router = useRouter();
+  const params = useParams();
+
+  const paramId = (params as any)?.id as string | undefined;
+  const [resolvedProfileId, setResolvedProfileId] = useState<string | null>(
+    paramId ?? null
+  );
+
   const [activeTab, setActiveTab] = useState<string>("reviews");
-  const [isFollowing, setIsFollowing] = useState<boolean>(false);
 
-  const tabs = [
-    {
-      id: "reviews",
-      label: "Reviews",
-      icon: <Star size={16} strokeWidth={1.5} />,
-    },
-    {
-      id: "lists",
-      label: "Reading Lists",
-      icon: <Bookmark size={16} strokeWidth={1.5} />,
-    },
-    { id: "about", label: "About", icon: <User size={16} strokeWidth={1.5} /> },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [profileData, setProfileData] = useState<ProfileDTO | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const userProfile = {
-    name: "John Doe",
-    username: "johndoe",
-    avatar: "JD",
-    bio: "Passionate reader and book reviewer. I love exploring different genres and sharing my thoughts on literature. Currently obsessed with sci-fi and philosophy.",
-    location: "San Francisco, CA",
-    joinDate: "January 2024",
-    website: "johndoe.com",
-    stats: {
-      reviews: 156,
-      followers: 2341,
-      following: 892,
-      readingLists: 23,
-    },
-    badges: [
-      { name: "Early Adopter", icon: "🌟", color: "text-yellow-400" },
-      { name: "100 Reviews", icon: "📚", color: "text-blue-400" },
-      { name: "Top Contributor", icon: "⭐", color: "text-purple-400" },
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviews, setReviews] = useState<PostCard[]>([]);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsHasMore, setReviewsHasMore] = useState(false);
+
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
+  const [bookmarks, setBookmarks] = useState<PostCard[]>([]);
+  const [bookmarksPage, setBookmarksPage] = useState(1);
+  const [bookmarksHasMore, setBookmarksHasMore] = useState(false);
+
+  const [followBusy, setFollowBusy] = useState(false);
+
+  const tabs = useMemo(
+    () => [
+      {
+        id: "reviews",
+        label: "Reviews",
+        icon: <Star size={16} strokeWidth={1.5} />,
+      },
+      {
+        id: "lists",
+        label: "Saved",
+        icon: <Bookmark size={16} strokeWidth={1.5} />,
+      },
+      {
+        id: "about",
+        label: "About",
+        icon: <User size={16} strokeWidth={1.5} />,
+      },
     ],
-    currentlyReading: [
-      { title: "Dune", author: "Frank Herbert", progress: 67 },
-      { title: "Sapiens", author: "Yuval Noah Harari", progress: 34 },
-    ],
-    readingGoal: {
-      current: 42,
-      target: 50,
-      year: 2024,
-    },
+    []
+  );
+
+  const generateAvatar = (name: string): string => {
+    if (!name) return "??";
+    const parts = name.trim().split(" ");
+    if (parts.length > 1) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return name.substring(0, 2).toUpperCase();
   };
 
-  const reviews = [
-    {
-      id: 1,
-      bookTitle: "The Midnight Library",
-      bookAuthor: "Matt Haig",
-      rating: 5,
-      title: "A Beautiful Meditation on Life's Possibilities",
-      excerpt:
-        "This book touched my soul in ways I didn't expect. Matt Haig's exploration of regret, choice, and infinite possibilities is both heartbreaking and hopeful...",
-      likes: 234,
-      comments: 45,
-      timestamp: "2 days ago",
-      genre: "Fiction",
-    },
-    {
-      id: 2,
-      bookTitle: "Project Hail Mary",
-      bookAuthor: "Andy Weir",
-      rating: 5,
-      title: "The Best Sci-Fi I've Read This Year",
-      excerpt:
-        "Andy Weir does it again! This book had me laughing, crying, and completely invested in the fate of humanity. The science is fascinating...",
-      likes: 189,
-      comments: 32,
-      timestamp: "1 week ago",
-      genre: "Science Fiction",
-    },
-    {
-      id: 3,
-      bookTitle: "Klara and the Sun",
-      bookAuthor: "Kazuo Ishiguro",
-      rating: 4,
-      title: "Haunting and Thought-Provoking",
-      excerpt:
-        "Ishiguro's prose is as beautiful as ever. This story about an AI's perspective on humanity raises profound questions about consciousness...",
-      likes: 156,
-      comments: 28,
-      timestamp: "2 weeks ago",
-      genre: "Literary Fiction",
-    },
-  ];
-
-  const readingLists = [
-    {
-      id: 1,
-      title: "Books That Changed My Life",
-      description: "Transformative reads that shaped my worldview",
-      books: 12,
-      followers: 456,
-      coverEmojis: ["📚", "💡", "🌟", "✨"],
-    },
-    {
-      id: 2,
-      title: "Essential Sci-Fi Classics",
-      description: "Must-read science fiction for every fan",
-      books: 24,
-      followers: 789,
-      coverEmojis: ["🚀", "👽", "🛸", "🌌"],
-    },
-    {
-      id: 3,
-      title: "Philosophy 101",
-      description: "Beginner-friendly philosophy books",
-      books: 18,
-      followers: 342,
-      coverEmojis: ["🤔", "💭", "🧠", "📘"],
-    },
-  ];
-
-  const handleSignOut = () => {
-    console.log("User signed out");
+  const getRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+    return date.toLocaleDateString();
   };
+
+  const joinLabel = (createdAt: string) => {
+    const d = new Date(createdAt);
+    return d.toLocaleString(undefined, { month: "long", year: "numeric" });
+  };
+
+  useEffect(() => {
+    let alive = true;
+
+    const resolve = async () => {
+      if (paramId) {
+        setResolvedProfileId(paramId);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to fetch current user");
+        const me = await res.json();
+
+        const meId =
+          me?.id ?? me?.user?.id ?? me?.user?.user?.id ?? me?.data?.id ?? null;
+
+        if (!me?.authenticated || !meId) {
+          throw new Error("Not authenticated");
+        }
+
+        if (alive) setResolvedProfileId(String(meId));
+      } catch (e: any) {
+        console.error(e);
+        if (alive) {
+          setError(e?.message || "Could not resolve profile");
+          setResolvedProfileId(null);
+          setLoading(false);
+        }
+      }
+    };
+
+    resolve();
+    return () => {
+      alive = false;
+    };
+  }, [paramId]);
+
+  useEffect(() => {
+    if (!resolvedProfileId) return;
+
+    let alive = true;
+
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/user/${resolvedProfileId}/profile`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to fetch profile");
+        const data: ProfileDTO = await res.json();
+        if (!alive) return;
+
+        setProfileData(data);
+      } catch (e: any) {
+        console.error(e);
+        if (!alive) return;
+        setError(e?.message || "Failed to load profile");
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [resolvedProfileId]);
+
+  const fetchReviews = async (page = 1, append = false) => {
+    if (!resolvedProfileId) return;
+    setReviewsLoading(true);
+
+    try {
+      const res = await fetch(
+        `/api/user/${resolvedProfileId}/posts?page=${page}&limit=10`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error("Failed to fetch posts");
+      const data: PagedPostsResponse = await res.json();
+
+      setReviews((prev) => (append ? [...prev, ...data.posts] : data.posts));
+      setReviewsPage(data.page);
+      setReviewsHasMore(data.has_more);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const fetchBookmarks = async (page = 1, append = false) => {
+    if (!resolvedProfileId) return;
+    setBookmarksLoading(true);
+
+    try {
+      const res = await fetch(
+        `/api/user/${resolvedProfileId}/bookmarks?page=${page}&limit=10`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error("Failed to fetch saved posts");
+      const data: PagedPostsResponse = await res.json();
+
+      setBookmarks((prev) => (append ? [...prev, ...data.posts] : data.posts));
+      setBookmarksPage(data.page);
+      setBookmarksHasMore(data.has_more);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBookmarksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!resolvedProfileId) return;
+    fetchReviews(1, false);
+  }, [resolvedProfileId]);
+
+  useEffect(() => {
+    if (!resolvedProfileId) return;
+    if (activeTab === "lists" && bookmarks.length === 0 && !bookmarksLoading) {
+      fetchBookmarks(1, false);
+    }
+  }, [activeTab, resolvedProfileId]);
+
+  const toggleFollow = async () => {
+    if (!profileData || !resolvedProfileId) return;
+    if (profileData.viewer.is_me) return;
+
+    const currentlyFollowing = profileData.viewer.is_following;
+    setFollowBusy(true);
+
+    setProfileData((prev) =>
+      prev
+        ? {
+            ...prev,
+            viewer: { ...prev.viewer, is_following: !currentlyFollowing },
+            stats: {
+              ...prev.stats,
+              followers: Math.max(
+                0,
+                prev.stats.followers + (currentlyFollowing ? -1 : 1)
+              ),
+            },
+          }
+        : prev
+    );
+
+    try {
+      const res = await fetch(`/api/user/${resolvedProfileId}/follow`, {
+        method: currentlyFollowing ? "DELETE" : "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Follow action failed");
+    } catch (e) {
+      console.error(e);
+      // rollback
+      setProfileData((prev) =>
+        prev
+          ? {
+              ...prev,
+              viewer: { ...prev.viewer, is_following: currentlyFollowing },
+              stats: {
+                ...prev.stats,
+                followers: Math.max(
+                  0,
+                  prev.stats.followers + (currentlyFollowing ? 1 : -1)
+                ),
+              },
+            }
+          : prev
+      );
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      const res = await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) router.push("/");
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <Loader className="animate-spin text-neutral-600" size={44} />
+      </div>
+    );
+  }
+
+  if (error || !profileData) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-200 flex flex-col items-center justify-center">
+        <p className="text-neutral-400">{error || "Profile not found"}</p>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="mt-4 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg border border-neutral-700"
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  const { profile, stats, viewer } = profileData;
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* Main Content */}
-      <main className="ml-72 min-h-screen">
-        {/* Cover/Header Area */}
-        <div className="h-48 bg-gradient-to-br from-neutral-800 to-neutral-900 border-b border-neutral-800"></div>
+      <main className="ml-0 lg:ml-72 min-h-screen pt-16 lg:pt-0">
+        <div className="h-32 sm:h-48 bg-gradient-to-br from-neutral-800 to-neutral-900 border-b border-neutral-800" />
 
-        {/* Profile Section */}
-        <div className="max-w-5xl mx-auto px-6">
-          {/* Profile Header */}
-          <div className="relative -mt-20 mb-6">
-            <div className="flex items-end space-x-6">
-              {/* Avatar */}
-              <div className="relative">
-                <div className="w-32 h-32 bg-neutral-800 border-4 border-neutral-950 rounded-full flex items-center justify-center text-neutral-300 text-4xl font-bold">
-                  {userProfile.avatar}
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="relative -mt-12 sm:-mt-20 mb-6">
+            {/* Mobile Layout */}
+            <div className="block sm:hidden">
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="relative mb-4">
+                  <div className="w-24 h-24 bg-neutral-800 border-4 border-neutral-950 rounded-full flex items-center justify-center text-neutral-300 text-3xl font-bold overflow-hidden">
+                    {profile.avatar_url ? (
+                      <span>{generateAvatar(profile.full_name)}</span>
+                    ) : (
+                      <span>{generateAvatar(profile.full_name)}</span>
+                    )}
+                  </div>
+
+                  {viewer.is_me && (
+                    <button className="absolute bottom-1 right-1 p-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full transition">
+                      <Edit3
+                        size={14}
+                        strokeWidth={1.5}
+                        className="text-neutral-300"
+                      />
+                    </button>
+                  )}
                 </div>
-                <button className="absolute bottom-2 right-2 p-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full transition">
-                  <Edit3
-                    size={16}
-                    strokeWidth={1.5}
-                    className="text-neutral-300"
-                  />
-                </button>
+
+                <h1 className="text-2xl font-serif text-neutral-200 mb-1">
+                  {profile.full_name}
+                </h1>
+                <p className="text-neutral-500 text-sm mb-4">
+                  @{profile.id.slice(0, 8)}
+                </p>
+
+                <div className="flex items-center gap-2 w-full">
+                  {viewer.is_me ? (
+                    <button className="flex-1 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center justify-center space-x-2">
+                      <Settings size={16} strokeWidth={1.5} />
+                      <span>Edit Profile</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={toggleFollow}
+                      disabled={followBusy}
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition border ${
+                        viewer.is_following
+                          ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-700 text-neutral-200"
+                          : "bg-neutral-200 hover:bg-white border-neutral-200 text-neutral-900"
+                      } disabled:opacity-60`}
+                    >
+                      {followBusy
+                        ? "Working..."
+                        : viewer.is_following
+                        ? "Following"
+                        : "Follow"}
+                    </button>
+                  )}
+
+                  <button className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition border border-neutral-700">
+                    <MessageCircle size={18} strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop Layout */}
+            <div className="hidden sm:flex items-end space-x-6">
+              <div className="relative">
+                <div className="w-32 h-32 bg-neutral-800 border-4 border-neutral-950 rounded-full flex items-center justify-center text-neutral-300 text-4xl font-bold overflow-hidden">
+                  {profile.avatar_url ? (
+                    <span>{generateAvatar(profile.full_name)}</span>
+                  ) : (
+                    <span>{generateAvatar(profile.full_name)}</span>
+                  )}
+                </div>
+
+                {viewer.is_me && (
+                  <button className="absolute bottom-2 right-2 p-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full transition">
+                    <Edit3
+                      size={16}
+                      strokeWidth={1.5}
+                      className="text-neutral-300"
+                    />
+                  </button>
+                )}
               </div>
 
-              {/* Name and Actions */}
               <div className="flex-1 pb-4">
                 <div className="flex items-start justify-between">
                   <div>
                     <h1 className="text-3xl font-serif text-neutral-200 mb-1">
-                      {userProfile.name}
+                      {profile.full_name}
                     </h1>
-                    <p className="text-neutral-500">@{userProfile.username}</p>
+                    <p className="text-neutral-500">
+                      @{profile.id.slice(0, 8)}
+                    </p>
                   </div>
+
                   <div className="flex items-center space-x-3">
-                    <button className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center space-x-2">
-                      <Settings size={16} strokeWidth={1.5} />
-                      <span>Edit Profile</span>
-                    </button>
+                    {viewer.is_me ? (
+                      <button className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center space-x-2">
+                        <Settings size={16} strokeWidth={1.5} />
+                        <span>Edit Profile</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={toggleFollow}
+                        disabled={followBusy}
+                        className={`px-4 py-2 rounded-lg font-medium transition border ${
+                          viewer.is_following
+                            ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-700 text-neutral-200"
+                            : "bg-neutral-200 hover:bg-white border-neutral-200 text-neutral-900"
+                        } disabled:opacity-60`}
+                      >
+                        {followBusy
+                          ? "Working..."
+                          : viewer.is_following
+                          ? "Following"
+                          : "Follow"}
+                      </button>
+                    )}
+
                     <button className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition border border-neutral-700">
                       <MessageCircle size={18} strokeWidth={1.5} />
                     </button>
@@ -191,258 +482,286 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Bio */}
             <div className="mt-6">
-              <p className="text-neutral-300 leading-relaxed mb-4 max-w-2xl">
-                {userProfile.bio}
+              <p className="text-neutral-300 leading-relaxed mb-4 max-w-2xl text-sm sm:text-base">
+                {profile.bio || "No bio yet."}
               </p>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-500">
-                <span className="flex items-center">
-                  <MapPin size={16} className="mr-1" strokeWidth={1.5} />
-                  {userProfile.location}
-                </span>
-                <span className="flex items-center">
-                  <Calendar size={16} className="mr-1" strokeWidth={1.5} />
-                  Joined {userProfile.joinDate}
-                </span>
-                <span className="flex items-center">
-                  <ExternalLink size={16} className="mr-1" strokeWidth={1.5} />
-                  <a
-                    href={`https://${userProfile.website}`}
-                    className="text-neutral-400 hover:text-neutral-200 transition"
-                  >
-                    {userProfile.website}
-                  </a>
-                </span>
-              </div>
-            </div>
 
-            {/* Stats */}
-            <div className="mt-6 flex items-center space-x-8">
-              <div>
-                <span className="text-2xl font-bold text-neutral-200">
-                  {userProfile.stats.reviews}
-                </span>
-                <span className="text-sm text-neutral-500 ml-2">Reviews</span>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-neutral-200">
-                  {userProfile.stats.followers.toLocaleString()}
-                </span>
-                <span className="text-sm text-neutral-500 ml-2">Followers</span>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-neutral-200">
-                  {userProfile.stats.following}
-                </span>
-                <span className="text-sm text-neutral-500 ml-2">Following</span>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-neutral-200">
-                  {userProfile.stats.readingLists}
-                </span>
-                <span className="text-sm text-neutral-500 ml-2">Lists</span>
-              </div>
-            </div>
-
-            {/* Badges */}
-            <div className="mt-6 flex items-center space-x-2">
-              {userProfile.badges.map((badge, idx) => (
-                <div
-                  key={idx}
-                  className="px-3 py-2 bg-neutral-800/50 border border-neutral-700 rounded-lg flex items-center space-x-2 hover:bg-neutral-800 transition"
-                  title={badge.name}
-                >
-                  <span className="text-lg">{badge.icon}</span>
-                  <span className={`text-xs font-medium ${badge.color}`}>
-                    {badge.name}
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-neutral-500">
+                {!!profile.location && (
+                  <span className="flex items-center">
+                    <MapPin size={14} className="mr-1" strokeWidth={1.5} />
+                    {profile.location}
                   </span>
-                </div>
-              ))}
+                )}
+
+                <span className="flex items-center">
+                  <Calendar size={14} className="mr-1" strokeWidth={1.5} />
+                  Joined {joinLabel(profile.created_at)}
+                </span>
+
+                {!!profile.website && (
+                  <span className="flex items-center">
+                    <ExternalLink
+                      size={14}
+                      className="mr-1"
+                      strokeWidth={1.5}
+                    />
+                    <a
+                      href={
+                        profile.website.startsWith("http")
+                          ? profile.website
+                          : `https://${profile.website}`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-neutral-400 hover:text-neutral-200 transition truncate max-w-[150px] sm:max-w-none"
+                    >
+                      {profile.website}
+                    </a>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 sm:flex sm:items-center gap-4 sm:gap-8">
+              <div>
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
+                  {stats.reviews}
+                </span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Posts
+                </span>
+              </div>
+              <div>
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
+                  {stats.followers.toLocaleString()}
+                </span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Followers
+                </span>
+              </div>
+              <div>
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
+                  {stats.following.toLocaleString()}
+                </span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Following
+                </span>
+              </div>
+              <div>
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
+                  {stats.readingLists}
+                </span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Saved
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="border-b border-neutral-800 mb-6">
-            <div className="flex space-x-6">
+          <div className="border-b border-neutral-800 mb-6 overflow-x-auto">
+            <div className="flex space-x-4 sm:space-x-6 min-w-max">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition ${
+                  className={`flex items-center space-x-2 px-3 sm:px-4 py-3 border-b-2 transition whitespace-nowrap ${
                     activeTab === tab.id
                       ? "border-neutral-300 text-neutral-200"
                       : "border-transparent text-neutral-500 hover:text-neutral-300"
                   }`}
                 >
                   {tab.icon}
-                  <span className="font-medium">{tab.label}</span>
+                  <span className="font-medium text-sm sm:text-base">
+                    {tab.label}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Content Area */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
-            {/* Main Content */}
-            <div className="lg:col-span-2">
-              {/* Reviews Tab */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 pb-12">
+            <div className="lg:col-span-2 min-w-0">
+              {/* Reviews (posts by user) */}
               {activeTab === "reviews" && (
                 <div className="space-y-6">
-                  {reviews.map((review) => (
-                    <article
-                      key={review.id}
-                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <h3 className="font-semibold text-neutral-100 text-lg">
-                              {review.bookTitle}
-                            </h3>
-                            <div className="flex items-center">
-                              {[...Array(5)].map((_, i) => (
-                                <Star
-                                  key={i}
-                                  size={14}
-                                  className={
-                                    i < review.rating
-                                      ? "text-yellow-500 fill-yellow-500"
-                                      : "text-neutral-700"
-                                  }
-                                  strokeWidth={1.5}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <p className="text-sm text-neutral-500 mb-2">
-                            by {review.bookAuthor}
-                          </p>
-                        </div>
-                        <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap">
-                          {review.genre}
-                        </span>
-                      </div>
-                      <h4 className="font-semibold text-neutral-200 mb-2">
-                        {review.title}
-                      </h4>
-                      <p className="text-neutral-400 text-sm leading-relaxed mb-4 line-clamp-3">
-                        {review.excerpt}
-                      </p>
-                      <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
-                        <div className="flex items-center space-x-4 text-sm text-neutral-500">
-                          <span className="flex items-center">
-                            <Heart
-                              size={16}
-                              className="mr-1"
-                              strokeWidth={1.5}
-                            />
-                            {review.likes}
-                          </span>
-                          <span className="flex items-center">
-                            <MessageCircle
-                              size={16}
-                              className="mr-1"
-                              strokeWidth={1.5}
-                            />
-                            {review.comments}
-                          </span>
-                        </div>
-                        <span className="text-xs text-neutral-600">
-                          {review.timestamp}
-                        </span>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-
-              {/* Reading Lists Tab */}
-              {activeTab === "lists" && (
-                <div className="grid grid-cols-1 gap-4">
-                  {readingLists.map((list) => (
-                    <div
-                      key={list.id}
-                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-5 hover:border-neutral-700 transition cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-neutral-100 text-lg mb-2">
-                            {list.title}
-                          </h3>
-                          <p className="text-sm text-neutral-400">
-                            {list.description}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex space-x-2 mb-4">
-                        {list.coverEmojis.map((emoji, idx) => (
-                          <div
-                            key={idx}
-                            className="w-14 h-16 bg-neutral-800 border border-neutral-700 rounded flex items-center justify-center text-2xl"
-                          >
-                            {emoji}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex items-center space-x-4 text-sm text-neutral-500 pt-3 border-t border-neutral-800">
-                        <span className="flex items-center">
-                          <BookOpen
-                            size={14}
-                            className="mr-1"
-                            strokeWidth={1.5}
-                          />
-                          {list.books} books
-                        </span>
-                        <span className="flex items-center">
-                          <Users size={14} className="mr-1" strokeWidth={1.5} />
-                          {list.followers} followers
-                        </span>
-                      </div>
+                  {reviewsLoading && reviews.length === 0 ? (
+                    <div className="flex items-center justify-center py-10 text-neutral-500">
+                      <Loader className="animate-spin mr-2" size={18} />
+                      Loading posts...
                     </div>
-                  ))}
+                  ) : reviews.length === 0 ? (
+                    <div className="text-center py-10 text-neutral-500">
+                      <p className="text-sm">No posts yet.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {reviews.map((p) => (
+                        <Link
+                          key={p.id}
+                          href={`/dashboard/posts/${p.id}`}
+                          className="block"
+                        >
+                          <article className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-neutral-100 text-lg">
+                                  {p.title}
+                                </h3>
+                                <p className="text-xs text-neutral-600 mt-1">
+                                  {getRelativeTime(p.created_at)} ·{" "}
+                                  {p.read_time ?? 5} min read
+                                </p>
+                              </div>
+                              <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap">
+                                {p.genre ?? "General"}
+                              </span>
+                            </div>
+
+                            {p.excerpt && (
+                              <p className="text-neutral-400 text-sm leading-relaxed mb-4 line-clamp-3">
+                                {p.excerpt}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+                              <div className="flex items-center space-x-4 text-sm text-neutral-500">
+                                <span className="flex items-center">
+                                  <Heart
+                                    size={16}
+                                    className="mr-1"
+                                    strokeWidth={1.5}
+                                  />
+                                  {p.likes_count ?? 0}
+                                </span>
+                                <span className="flex items-center">
+                                  <MessageCircle
+                                    size={16}
+                                    className="mr-1"
+                                    strokeWidth={1.5}
+                                  />
+                                  {p.comments_count ?? 0}
+                                </span>
+                              </div>
+                            </div>
+                          </article>
+                        </Link>
+                      ))}
+
+                      {reviewsHasMore && (
+                        <div className="pt-2">
+                          <button
+                            onClick={() => fetchReviews(reviewsPage + 1, true)}
+                            disabled={reviewsLoading}
+                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-60 text-neutral-200 rounded-lg border border-neutral-700"
+                          >
+                            {reviewsLoading ? "Loading..." : "Load more"}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
-              {/* About Tab */}
+              {/* Saved (bookmarks) */}
+              {activeTab === "lists" && (
+                <div className="space-y-6">
+                  {bookmarksLoading && bookmarks.length === 0 ? (
+                    <div className="flex items-center justify-center py-10 text-neutral-500">
+                      <Loader className="animate-spin mr-2" size={18} />
+                      Loading saved posts...
+                    </div>
+                  ) : bookmarks.length === 0 ? (
+                    <div className="text-center py-10 text-neutral-500">
+                      <p className="text-sm">No saved posts yet.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {bookmarks.map((p) => (
+                        <Link
+                          key={p.id}
+                          href={`/dashboard/posts/${p.id}`}
+                          className="block"
+                        >
+                          <article className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer">
+                            <div className="flex items-start justify-between mb-2">
+                              <h3 className="font-semibold text-neutral-100 text-lg">
+                                {p.title}
+                              </h3>
+                              <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap">
+                                {p.genre ?? "General"}
+                              </span>
+                            </div>
+
+                            {p.excerpt && (
+                              <p className="text-neutral-400 text-sm leading-relaxed line-clamp-3">
+                                {p.excerpt}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between pt-3 mt-4 border-t border-neutral-800">
+                              <p className="text-xs text-neutral-600">
+                                {getRelativeTime(p.created_at)}
+                              </p>
+                              <div className="flex items-center space-x-4 text-sm text-neutral-500">
+                                <span className="flex items-center">
+                                  <Heart
+                                    size={16}
+                                    className="mr-1"
+                                    strokeWidth={1.5}
+                                  />
+                                  {p.likes_count ?? 0}
+                                </span>
+                                <span className="flex items-center">
+                                  <MessageCircle
+                                    size={16}
+                                    className="mr-1"
+                                    strokeWidth={1.5}
+                                  />
+                                  {p.comments_count ?? 0}
+                                </span>
+                              </div>
+                            </div>
+                          </article>
+                        </Link>
+                      ))}
+
+                      {bookmarksHasMore && (
+                        <div className="pt-2">
+                          <button
+                            onClick={() =>
+                              fetchBookmarks(bookmarksPage + 1, true)
+                            }
+                            disabled={bookmarksLoading}
+                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-60 text-neutral-200 rounded-lg border border-neutral-700"
+                          >
+                            {bookmarksLoading ? "Loading..." : "Load more"}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* About */}
               {activeTab === "about" && (
                 <div className="space-y-6">
                   <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-neutral-200 mb-4">
-                      About Me
+                      About
                     </h3>
                     <p className="text-neutral-400 leading-relaxed">
-                      {userProfile.bio}
+                      {profile.bio || "No bio yet."}
                     </p>
-                  </div>
-                  <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-neutral-200 mb-4">
-                      Favorite Genres
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        "Science Fiction",
-                        "Philosophy",
-                        "Literary Fiction",
-                        "Mystery",
-                        "Non-Fiction",
-                      ].map((genre) => (
-                        <span
-                          key={genre}
-                          className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-neutral-300"
-                        >
-                          {genre}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Reading Goal */}
+            <div className="hidden lg:block space-y-6">
               <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
                 <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
                   <Target
@@ -450,98 +769,20 @@ export default function ProfilePage() {
                     size={16}
                     strokeWidth={1.5}
                   />
-                  {userProfile.readingGoal.year} Reading Goal
+                  Reading Goal
                 </h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-2xl font-bold text-neutral-200">
-                        {userProfile.readingGoal.current}
-                      </span>
-                      <span className="text-sm text-neutral-500">
-                        of {userProfile.readingGoal.target} books
-                      </span>
-                    </div>
-                    <div className="h-2 bg-neutral-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-neutral-300 transition-all"
-                        style={{
-                          width: `${
-                            (userProfile.readingGoal.current /
-                              userProfile.readingGoal.target) *
-                            100
-                          }%`,
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-neutral-500">
-                    {userProfile.readingGoal.target -
-                      userProfile.readingGoal.current}{" "}
-                    books to go!
-                  </p>
-                </div>
+                <p className="text-xs text-neutral-500">
+                  Make this dynamic later (needs a table).
+                </p>
               </div>
 
-              {/* Currently Reading */}
-              <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">
-                  Currently Reading
-                </h3>
-                <div className="space-y-4">
-                  {userProfile.currentlyReading.map((book, idx) => (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-neutral-200 truncate">
-                            {book.title}
-                          </p>
-                          <p className="text-xs text-neutral-500 truncate">
-                            {book.author}
-                          </p>
-                        </div>
-                        <span className="text-xs text-neutral-500 ml-2">
-                          {book.progress}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-neutral-400 transition-all"
-                          style={{ width: `${book.progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Activity Stats */}
               <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
                 <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">
                   Activity
                 </h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-400">This Week</span>
-                    <span className="text-sm font-semibold text-neutral-200">
-                      12 reviews
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-400">This Month</span>
-                    <span className="text-sm font-semibold text-neutral-200">
-                      47 reviews
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-400">
-                      Total Likes
-                    </span>
-                    <span className="text-sm font-semibold text-neutral-200">
-                      8.4K
-                    </span>
-                  </div>
-                </div>
+                <p className="text-xs text-neutral-500">
+                  Make this dynamic later (aggregate from posts/likes/comments).
+                </p>
               </div>
             </div>
           </div>
