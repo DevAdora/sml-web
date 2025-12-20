@@ -31,7 +31,7 @@ export async function GET(
         const { data: profile, error: profileError } = await supabase
             .schema("sml")
             .from("profiles")
-            .select("id, full_name, avatar_url, bio, location, website, created_at")
+            .select("id, full_name, avatar_url, bio, created_at")
             .eq("id", profileId)
             .single();
 
@@ -85,8 +85,6 @@ export async function GET(
                 full_name: profile.full_name ?? "Anonymous",
                 avatar_url: profile.avatar_url ?? null,
                 bio: profile.bio ?? "",
-                location: profile.location ?? "",
-                website: profile.website ?? "",
                 created_at: profile.created_at,
             },
             stats: {

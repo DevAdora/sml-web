@@ -351,16 +351,77 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-neutral-950 text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      <main className="ml-72 min-h-screen">
-        <div className="h-48 bg-gradient-to-br from-neutral-800 to-neutral-900 border-b border-neutral-800" />
+      <main className="ml-0 lg:ml-72 min-h-screen pt-16 lg:pt-0">
+        <div className="h-32 sm:h-48 bg-gradient-to-br from-neutral-800 to-neutral-900 border-b border-neutral-800" />
 
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="relative -mt-20 mb-6">
-            <div className="flex items-end space-x-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="relative -mt-12 sm:-mt-20 mb-6">
+            {/* Mobile Layout */}
+            <div className="block sm:hidden">
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="relative mb-4">
+                  <div className="w-24 h-24 bg-neutral-800 border-4 border-neutral-950 rounded-full flex items-center justify-center text-neutral-300 text-3xl font-bold overflow-hidden">
+                    {profile.avatar_url ? (
+                      <span>{generateAvatar(profile.full_name)}</span>
+                    ) : (
+                      <span>{generateAvatar(profile.full_name)}</span>
+                    )}
+                  </div>
+
+                  {viewer.is_me && (
+                    <button className="absolute bottom-1 right-1 p-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full transition">
+                      <Edit3
+                        size={14}
+                        strokeWidth={1.5}
+                        className="text-neutral-300"
+                      />
+                    </button>
+                  )}
+                </div>
+
+                <h1 className="text-2xl font-serif text-neutral-200 mb-1">
+                  {profile.full_name}
+                </h1>
+                <p className="text-neutral-500 text-sm mb-4">
+                  @{profile.id.slice(0, 8)}
+                </p>
+
+                <div className="flex items-center gap-2 w-full">
+                  {viewer.is_me ? (
+                    <button className="flex-1 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center justify-center space-x-2">
+                      <Settings size={16} strokeWidth={1.5} />
+                      <span>Edit Profile</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={toggleFollow}
+                      disabled={followBusy}
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition border ${
+                        viewer.is_following
+                          ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-700 text-neutral-200"
+                          : "bg-neutral-200 hover:bg-white border-neutral-200 text-neutral-900"
+                      } disabled:opacity-60`}
+                    >
+                      {followBusy
+                        ? "Working..."
+                        : viewer.is_following
+                        ? "Following"
+                        : "Follow"}
+                    </button>
+                  )}
+
+                  <button className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition border border-neutral-700">
+                    <MessageCircle size={18} strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop Layout */}
+            <div className="hidden sm:flex items-end space-x-6">
               <div className="relative">
                 <div className="w-32 h-32 bg-neutral-800 border-4 border-neutral-950 rounded-full flex items-center justify-center text-neutral-300 text-4xl font-bold overflow-hidden">
                   {profile.avatar_url ? (
-                    // Replace with <Image /> later if you want
                     <span>{generateAvatar(profile.full_name)}</span>
                   ) : (
                     <span>{generateAvatar(profile.full_name)}</span>
@@ -422,27 +483,27 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-6">
-              <p className="text-neutral-300 leading-relaxed mb-4 max-w-2xl">
+              <p className="text-neutral-300 leading-relaxed mb-4 max-w-2xl text-sm sm:text-base">
                 {profile.bio || "No bio yet."}
               </p>
 
-              <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-500">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-neutral-500">
                 {!!profile.location && (
                   <span className="flex items-center">
-                    <MapPin size={16} className="mr-1" strokeWidth={1.5} />
+                    <MapPin size={14} className="mr-1" strokeWidth={1.5} />
                     {profile.location}
                   </span>
                 )}
 
                 <span className="flex items-center">
-                  <Calendar size={16} className="mr-1" strokeWidth={1.5} />
+                  <Calendar size={14} className="mr-1" strokeWidth={1.5} />
                   Joined {joinLabel(profile.created_at)}
                 </span>
 
                 {!!profile.website && (
                   <span className="flex items-center">
                     <ExternalLink
-                      size={16}
+                      size={14}
                       className="mr-1"
                       strokeWidth={1.5}
                     />
@@ -454,7 +515,7 @@ export default function ProfilePage() {
                       }
                       target="_blank"
                       rel="noreferrer"
-                      className="text-neutral-400 hover:text-neutral-200 transition"
+                      className="text-neutral-400 hover:text-neutral-200 transition truncate max-w-[150px] sm:max-w-none"
                     >
                       {profile.website}
                     </a>
@@ -463,58 +524,68 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 flex items-center space-x-8">
+            <div className="mt-6 grid grid-cols-2 sm:flex sm:items-center gap-4 sm:gap-8">
               <div>
-                <span className="text-2xl font-bold text-neutral-200">
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
                   {stats.reviews}
                 </span>
-                <span className="text-sm text-neutral-500 ml-2">Posts</span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Posts
+                </span>
               </div>
               <div>
-                <span className="text-2xl font-bold text-neutral-200">
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
                   {stats.followers.toLocaleString()}
                 </span>
-                <span className="text-sm text-neutral-500 ml-2">Followers</span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Followers
+                </span>
               </div>
               <div>
-                <span className="text-2xl font-bold text-neutral-200">
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
                   {stats.following.toLocaleString()}
                 </span>
-                <span className="text-sm text-neutral-500 ml-2">Following</span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Following
+                </span>
               </div>
               <div>
-                <span className="text-2xl font-bold text-neutral-200">
+                <span className="text-xl sm:text-2xl font-bold text-neutral-200">
                   {stats.readingLists}
                 </span>
-                <span className="text-sm text-neutral-500 ml-2">Saved</span>
+                <span className="text-xs sm:text-sm text-neutral-500 ml-2">
+                  Saved
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="border-b border-neutral-800 mb-6">
-            <div className="flex space-x-6">
+          <div className="border-b border-neutral-800 mb-6 overflow-x-auto">
+            <div className="flex space-x-4 sm:space-x-6 min-w-max">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition ${
+                  className={`flex items-center space-x-2 px-3 sm:px-4 py-3 border-b-2 transition whitespace-nowrap ${
                     activeTab === tab.id
                       ? "border-neutral-300 text-neutral-200"
                       : "border-transparent text-neutral-500 hover:text-neutral-300"
                   }`}
                 >
                   {tab.icon}
-                  <span className="font-medium">{tab.label}</span>
+                  <span className="font-medium text-sm sm:text-base">
+                    {tab.label}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
-            <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 pb-12">
+            <div className="lg:col-span-2 min-w-0">
               {/* Reviews (posts by user) */}
               {activeTab === "reviews" && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {reviewsLoading && reviews.length === 0 ? (
                     <div className="flex items-center justify-center py-10 text-neutral-500">
                       <Loader className="animate-spin mr-2" size={18} />
@@ -527,7 +598,11 @@ export default function ProfilePage() {
                   ) : (
                     <>
                       {reviews.map((p) => (
-                        <Link key={p.id} href={`/dashboard/posts/${p.id}`}>
+                        <Link
+                          key={p.id}
+                          href={`/dashboard/posts/${p.id}`}
+                          className="block"
+                        >
                           <article className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer">
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
@@ -592,7 +667,7 @@ export default function ProfilePage() {
 
               {/* Saved (bookmarks) */}
               {activeTab === "lists" && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {bookmarksLoading && bookmarks.length === 0 ? (
                     <div className="flex items-center justify-center py-10 text-neutral-500">
                       <Loader className="animate-spin mr-2" size={18} />
@@ -605,7 +680,11 @@ export default function ProfilePage() {
                   ) : (
                     <>
                       {bookmarks.map((p) => (
-                        <Link key={p.id} href={`/dashboard/posts/${p.id}`}>
+                        <Link
+                          key={p.id}
+                          href={`/dashboard/posts/${p.id}`}
+                          className="block"
+                        >
                           <article className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer">
                             <div className="flex items-start justify-between mb-2">
                               <h3 className="font-semibold text-neutral-100 text-lg">
@@ -682,7 +761,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="space-y-6">
+            <div className="hidden lg:block space-y-6">
               <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
                 <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
                   <Target
