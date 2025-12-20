@@ -18,6 +18,7 @@ import {
   Loader,
 } from "lucide-react";
 import LeftSidebar from "@/app/components/Sidebar";
+import EditProfileModal from "@/app/components/EditProfileModal";
 
 type ProfileDTO = {
   profile: {
@@ -85,6 +86,8 @@ export default function ProfilePage() {
   const [bookmarksPage, setBookmarksPage] = useState(1);
   const [bookmarksHasMore, setBookmarksHasMore] = useState(false);
 
+  const [showEditModal, setShowEditModal] = useState(false);
+
   const [followBusy, setFollowBusy] = useState(false);
 
   const tabs = useMemo(
@@ -124,6 +127,47 @@ export default function ProfilePage() {
     if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
     if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
     return date.toLocaleDateString();
+  };
+
+  const handleSaveProfile = async (
+    updates: Partial<{
+      full_name: string;
+      bio: string;
+      location: string;
+      website: string;
+      avatar_url: string | null;
+    }>
+  ) => {
+    if (!resolvedProfileId) return;
+
+    try {
+      const res = await fetch(`/api/user/${resolvedProfileId}/profile`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) throw new Error("Failed to update profile");
+      const data = await res.json();
+
+      setProfileData((prev) =>
+        prev
+          ? {
+              ...prev,
+              profile: {
+                ...prev.profile,
+                ...data.profile,
+              },
+            }
+          : prev
+      );
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      throw error;
+    }
   };
 
   const joinLabel = (createdAt: string) => {
@@ -362,14 +406,21 @@ export default function ProfilePage() {
                 <div className="relative mb-4">
                   <div className="w-24 h-24 bg-neutral-800 border-4 border-neutral-950 rounded-full flex items-center justify-center text-neutral-300 text-3xl font-bold overflow-hidden">
                     {profile.avatar_url ? (
-                      <span>{generateAvatar(profile.full_name)}</span>
+                      <img
+                        src={profile.avatar_url}
+                        alt={profile.full_name}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <span>{generateAvatar(profile.full_name)}</span>
                     )}
                   </div>
 
                   {viewer.is_me && (
-                    <button className="absolute bottom-1 right-1 p-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full transition">
+                    <button
+                      onClick={() => setShowEditModal(true)}
+                      className="absolute bottom-1 right-1 p-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-full transition"
+                    >
                       <Edit3
                         size={14}
                         strokeWidth={1.5}
@@ -388,7 +439,10 @@ export default function ProfilePage() {
 
                 <div className="flex items-center gap-2 w-full">
                   {viewer.is_me ? (
-                    <button className="flex-1 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center justify-center space-x-2">
+                    <button
+                      onClick={() => setShowEditModal(true)}
+                      className="flex-1 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center justify-center space-x-2"
+                    >
                       <Settings size={16} strokeWidth={1.5} />
                       <span>Edit Profile</span>
                     </button>
@@ -396,7 +450,7 @@ export default function ProfilePage() {
                     <button
                       onClick={toggleFollow}
                       disabled={followBusy}
-                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition border ${
+                      className={`px-4 py-2 rounded-lg font-medium transition border ${
                         viewer.is_following
                           ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-700 text-neutral-200"
                           : "bg-neutral-200 hover:bg-white border-neutral-200 text-neutral-900"
@@ -417,12 +471,15 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Desktop Layout */}
             <div className="hidden sm:flex items-end space-x-6">
               <div className="relative">
                 <div className="w-32 h-32 bg-neutral-800 border-4 border-neutral-950 rounded-full flex items-center justify-center text-neutral-300 text-4xl font-bold overflow-hidden">
                   {profile.avatar_url ? (
-                    <span>{generateAvatar(profile.full_name)}</span>
+                    <img
+                      src={profile.avatar_url}
+                      alt={profile.full_name}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <span>{generateAvatar(profile.full_name)}</span>
                   )}
@@ -452,7 +509,10 @@ export default function ProfilePage() {
 
                   <div className="flex items-center space-x-3">
                     {viewer.is_me ? (
-                      <button className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center space-x-2">
+                      <button
+                        onClick={() => setShowEditModal(true)}
+                        className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg font-medium transition border border-neutral-700 flex items-center space-x-2"
+                      >
                         <Settings size={16} strokeWidth={1.5} />
                         <span>Edit Profile</span>
                       </button>
@@ -757,6 +817,14 @@ export default function ProfilePage() {
                       {profile.bio || "No bio yet."}
                     </p>
                   </div>
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-neutral-200 mb-4">
+                      Location
+                    </h3>
+                    <p className="text-neutral-400 leading-relaxed">
+                      {profile.location || "Keeping it a secret"}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -788,6 +856,14 @@ export default function ProfilePage() {
           </div>
         </div>
       </main>
+      {showEditModal && (
+        <EditProfileModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          profile={profile}
+          onSave={handleSaveProfile}
+        />
+      )}
     </div>
   );
 }
