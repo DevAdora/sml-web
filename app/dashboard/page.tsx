@@ -236,99 +236,7 @@ export default function SMLDashboard() {
       }));
     }
   };
-
-  const fetchExternalAPIs = async () => {
-    const externalPosts: FeedPost[] = [];
-
-    try {
-      const nytResponse = await fetch(
-        "https://api.nytimes.com/svc/books/v3/lists/overview.json?api-key=DEMO_KEY"
-      );
-      const nytData = await nytResponse.json();
-
-      if (nytData.results && nytData.results.lists) {
-        nytData.results.lists.forEach((list: any) => {
-          list.books.slice(0, 2).forEach((book: any) => {
-            const postId = `nyt-${book.primary_isbn13}`;
-            externalPosts.push({
-              id: postId,
-              title: `Review: ${book.title}`,
-              author: book.author,
-              author_id: "nyt-books",
-              avatar: generateAvatar(book.author),
-              genre: list.list_name,
-              likes: Math.floor(Math.random() * 500) + 100,
-              comments: Math.floor(Math.random() * 100) + 10,
-              readTime: `${Math.floor(Math.random() * 10) + 5} min`,
-              excerpt:
-                book.description ||
-                `A fascinating look at ${book.title} by ${book.author}.`,
-              timestamp: getRelativeTime(
-                new Date(
-                  Date.now() - Math.random() * 86400000 * 3
-                ).toISOString()
-              ),
-              link:
-                book.amazon_product_url ||
-                (book.buy_links && book.buy_links[0]
-                  ? book.buy_links[0].url
-                  : undefined),
-              source: "NY Times Books",
-              likes_count: Math.floor(Math.random() * 500) + 100,
-              comments_count: Math.floor(Math.random() * 100) + 10,
-              read_time: Math.floor(Math.random() * 10) + 5,
-              created_at: new Date(
-                Date.now() - Math.random() * 86400000 * 3
-              ).toISOString(),
-              isExternal: true,
-            });
-          });
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching NY Times books:", error);
-    }
-
-    try {
-      const guardianResponse = await fetch(
-        "https://content.guardianapis.com/search?section=books&show-fields=trailText,thumbnail&page-size=10&api-key=test"
-      );
-      const guardianData = await guardianResponse.json();
-
-      if (guardianData.response && guardianData.response.results) {
-        guardianData.response.results.forEach((article: any) => {
-          const postId = `guardian-${article.id}`;
-          externalPosts.push({
-            id: postId,
-            title: article.webTitle,
-            author: "The Guardian",
-            author_id: "guardian",
-            avatar: "TG",
-            genre: article.sectionName || "Books",
-            likes: Math.floor(Math.random() * 300) + 50,
-            comments: Math.floor(Math.random() * 80) + 5,
-            readTime: `${Math.floor(Math.random() * 8) + 3} min`,
-            excerpt:
-              article.fields?.trailText ||
-              "An insightful article from The Guardian.",
-            timestamp: getRelativeTime(article.webPublicationDate),
-            link: article.webUrl,
-            source: "The Guardian",
-            likes_count: Math.floor(Math.random() * 300) + 50,
-            comments_count: Math.floor(Math.random() * 80) + 5,
-            read_time: Math.floor(Math.random() * 8) + 3,
-            created_at: article.webPublicationDate,
-            isExternal: true,
-          });
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching Guardian articles:", error);
-    }
-
-    return externalPosts;
-  };
-
+  
   const fetchInternalPosts = async (pageNum: number) => {
     try {
       const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
@@ -386,12 +294,11 @@ export default function SMLDashboard() {
     const fetchInitialData = async () => {
       setLoadingPosts(true);
 
-      const [externalPosts, internalData] = await Promise.all([
-        fetchExternalAPIs(),
+      const [internalData] = await Promise.all([
         fetchInternalPosts(1),
       ]);
 
-      const allPosts = [...externalPosts, ...internalData.posts].sort(
+      const allPosts = [...internalData.posts].sort(
         (a, b) => {
           const dateA = new Date(a.created_at).getTime();
           const dateB = new Date(b.created_at).getTime();
