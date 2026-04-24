@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/app/lib/supabase/client";
 import Link from "next/link";
 import { Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
 
@@ -38,145 +37,402 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 shadow-lg">
-        {/* Logo/Title */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-black dark:text-white mb-2">
-            SML
-          </h1>
-       
-        </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap');
 
-        {/* Login Card */}
-        <div className="">
-          <form onSubmit={handleLogin} className="space-y-6">
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-50 dark:bg-red-900/20  p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-red-800 dark:text-red-400 text-sm font-medium">
-                    Authentication Failed
-                  </p>
-                  <p className="text-red-600 dark:text-red-300 text-xs mt-1">
-                    {error}
-                  </p>
-                </div>
-              </div>
-            )}
+        .login-root {
+          min-height: 100vh;
+          background: #0a0806;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1.5rem;
+          font-family: 'Crimson Pro', Georgia, serif;
+          position: relative;
+          overflow: hidden;
+        }
 
-            {/* Email Input */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-              >
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg 
-                  text-black dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 
-                  focus:ring-black dark:focus:ring-white focus:border-transparent transition-all"
-                placeholder="you@example.com"
-              />
-            </div>
+        .login-root::before {
+          content: '';
+          position: fixed;
+          inset: 0;
+          background:
+            radial-gradient(ellipse 70% 50% at 15% 15%, rgba(180, 120, 30, 0.07) 0%, transparent 60%),
+            radial-gradient(ellipse 50% 70% at 85% 85%, rgba(100, 60, 10, 0.06) 0%, transparent 60%);
+          pointer-events: none;
+        }
 
-            {/* Password Input */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg 
-                    text-black dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 
-                    focus:ring-black dark:focus:ring-white focus:border-transparent transition-all pr-12"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
+        .login-split {
+          display: flex;
+          width: 100%;
+          max-width: 900px;
+          min-height: 560px;
+          background: #100e09;
+          border: 1px solid rgba(255, 200, 80, 0.08);
+          box-shadow: 0 8px 80px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
+          position: relative;
+          z-index: 1;
+        }
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-black dark:bg-white text-white dark:text-black font-semibold 
-                py-3 px-6 rounded-full transition-all hover:opacity-80
-                disabled:opacity-50 disabled:cursor-not-allowed flex items-center 
-                justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 dark:border-black/30 border-t-white dark:border-t-black rounded-full animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  Sign In
-                </>
-              )}
-            </button>
-          </form>
+        .login-panel-left {
+          width: 42%;
+          background: #080604;
+          position: relative;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          padding: 2.5rem;
+          flex-shrink: 0;
+          border-right: 1px solid rgba(255, 200, 80, 0.06);
+        }
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400">
-                Dont have an account?
-              </span>
+        .panel-glow {
+          position: absolute; inset: 0;
+          background:
+            radial-gradient(ellipse 120% 55% at 50% 0%, rgba(180, 120, 30, 0.14) 0%, transparent 60%),
+            radial-gradient(ellipse 70% 100% at 80% 100%, rgba(80, 50, 10, 0.2) 0%, transparent 55%);
+        }
+
+        .panel-lines {
+          position: absolute; inset: 0;
+          background-image: repeating-linear-gradient(
+            0deg,
+            transparent, transparent 28px,
+            rgba(255, 200, 80, 0.025) 28px,
+            rgba(255, 200, 80, 0.025) 29px
+          );
+        }
+
+        .panel-bigquote {
+          position: absolute;
+          top: 1.5rem; left: 2rem;
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 9rem;
+          line-height: 0.8;
+          color: rgba(200, 150, 50, 0.07);
+          font-weight: 300;
+          user-select: none;
+          pointer-events: none;
+        }
+
+        .panel-content { position: relative; z-index: 1; }
+
+        .panel-rule {
+          width: 2rem; height: 1px;
+          background: rgba(200, 150, 50, 0.28);
+          margin-bottom: 0.875rem;
+        }
+
+        .panel-quote {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 1.1rem;
+          font-style: italic;
+          font-weight: 300;
+          color: rgba(230, 200, 140, 0.82);
+          line-height: 1.75;
+          margin-bottom: 0.75rem;
+        }
+
+        .panel-attr {
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 0.7rem;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: rgba(200, 150, 50, 0.5);
+        }
+
+        .login-panel-right {
+          flex: 1;
+          padding: 3rem;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .login-wordmark {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 2.1rem;
+          font-weight: 400;
+          letter-spacing: 0.08em;
+          color: #e8d5a0;
+          margin-bottom: 0.2rem;
+        }
+
+        .login-tagline {
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 0.82rem;
+          font-style: italic;
+          color: rgba(200, 150, 60, 0.6);
+          margin-bottom: 2.25rem;
+        }
+
+        .login-form-title {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 1.4rem;
+          font-weight: 500;
+          color: #dfc47e;
+          margin-bottom: 1.5rem;
+        }
+
+        .form-group { margin-bottom: 1.1rem; }
+
+        .form-label {
+          display: block;
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 0.7rem;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(200, 160, 70, 0.6);
+          margin-bottom: 0.4rem;
+        }
+
+        .form-input {
+          width: 100%;
+          padding: 0.7rem 0.9rem;
+          background: #0d0b08;
+          border: 1px solid rgba(200, 150, 60, 0.14);
+          border-bottom: 2px solid rgba(200, 150, 60, 0.3);
+          color: #ddc98a;
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 1rem;
+          outline: none;
+          transition: border-color 0.2s, background 0.2s;
+          box-sizing: border-box;
+          -webkit-appearance: none;
+        }
+
+        .form-input::placeholder { color: rgba(200, 150, 60, 0.22); }
+
+        .form-input:focus {
+          border-bottom-color: #d4a84b;
+          background: #0f0d09;
+        }
+
+        .input-wrapper { position: relative; }
+
+        .input-icon-btn {
+          position: absolute;
+          right: 0.75rem; top: 50%;
+          transform: translateY(-50%);
+          background: none; border: none; cursor: pointer;
+          color: rgba(200, 150, 60, 0.35);
+          display: flex; align-items: center;
+          transition: color 0.2s;
+          padding: 0.25rem;
+        }
+
+        .input-icon-btn:hover { color: rgba(200, 150, 60, 0.75); }
+        .form-input.with-icon { padding-right: 2.75rem; }
+
+        .btn-primary {
+          width: 100%;
+          padding: 0.85rem 1.5rem;
+          background: #c9960a;
+          color: #0a0806;
+          border: none;
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 0.95rem;
+          font-weight: 600;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          cursor: pointer;
+          transition: background 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          margin-top: 0.75rem;
+        }
+
+        .btn-primary:hover:not(:disabled) { background: #dba80e; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-spinner {
+          width: 1rem; height: 1rem;
+          border: 1.5px solid rgba(10, 8, 6, 0.3);
+          border-top-color: #0a0806;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .login-divider {
+          display: flex; align-items: center;
+          gap: 1rem; margin: 1.4rem 0;
+        }
+
+        .divider-line { flex: 1; height: 1px; background: rgba(200, 150, 60, 0.1); }
+
+        .divider-text {
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 0.75rem;
+          font-style: italic;
+          color: rgba(200, 150, 60, 0.38);
+          white-space: nowrap;
+        }
+
+        .btn-secondary {
+          width: 100%;
+          padding: 0.72rem 1.5rem;
+          background: transparent;
+          color: #c8a85a;
+          border: 1px solid rgba(200, 150, 60, 0.22);
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 0.9rem;
+          font-weight: 500;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          cursor: pointer;
+          transition: background 0.2s, border-color 0.2s;
+          text-align: center;
+          display: block;
+          text-decoration: none;
+        }
+
+        .btn-secondary:hover {
+          background: rgba(200, 150, 60, 0.06);
+          border-color: rgba(200, 150, 60, 0.4);
+        }
+
+        .back-link {
+          display: block;
+          text-align: center;
+          margin-top: 1.25rem;
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 0.82rem;
+          font-style: italic;
+          color: rgba(200, 150, 60, 0.38);
+          text-decoration: none;
+          transition: color 0.2s;
+        }
+
+        .back-link:hover { color: rgba(200, 150, 60, 0.7); }
+
+        .error-box {
+          background: rgba(180, 60, 40, 0.1);
+          border: 1px solid rgba(180, 60, 40, 0.2);
+          border-left: 2px solid rgba(200, 80, 50, 0.7);
+          padding: 0.8rem 1rem;
+          display: flex;
+          align-items: flex-start;
+          gap: 0.6rem;
+          margin-bottom: 1.1rem;
+        }
+
+        .error-title {
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 0.72rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: rgba(220, 100, 80, 0.9);
+          margin-bottom: 0.15rem;
+        }
+
+        .error-msg {
+          font-family: 'Crimson Pro', Georgia, serif;
+          font-size: 0.875rem;
+          font-style: italic;
+          color: rgba(220, 130, 110, 0.85);
+        }
+
+        @media (max-width: 640px) {
+          .login-panel-left { display: none; }
+          .login-panel-right { padding: 2.5rem 1.75rem; }
+        }
+      `}</style>
+
+      <div className="login-root">
+        <div className="login-split">
+          <div className="login-panel-left">
+            <div className="panel-glow" />
+            <div className="panel-lines" />
+            <div className="panel-bigquote">"</div>
+            <div className="panel-content">
+              <div className="panel-rule" />
+              <p className="panel-quote">
+                A reader lives a thousand lives before he dies. The man who never reads lives only one.
+              </p>
+              <span className="panel-attr">— George R.R. Martin</span>
             </div>
           </div>
 
-          {/* Sign Up Link */}
-          <Link
-            href="/auth/signup"
-            className="block w-full text-center py-3 px-6 border border-zinc-300 dark:border-zinc-700 
-              rounded-full text-black dark:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800 
-              transition-all font-medium"
-          >
-            Create an Account
-          </Link>
-        </div>
+          <div className="login-panel-right">
+            <div className="login-wordmark">SML</div>
+            <p className="login-tagline">where every page finds its reader</p>
+            <h2 className="login-form-title">Welcome back</h2>
 
-        {/* Back to Home */}
-        <div className="text-center mt-6">
-          <Link
-            href="/"
-            className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-          >
-            ← Back to Home
-          </Link>
+            <form onSubmit={handleLogin}>
+              {error && (
+                <div className="error-box">
+                  <AlertCircle size={15} color="rgba(220,100,80,0.9)" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <p className="error-title">Authentication Failed</p>
+                    <p className="error-msg">{error}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="email" className="form-label">Email Address</label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="form-input"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="password" className="form-label">Password</label>
+                <div className="input-wrapper">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="form-input with-icon"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="input-icon-btn"
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={loading} className="btn-primary">
+                {loading ? (
+                  <><div className="btn-spinner" /> Signing in…</>
+                ) : (
+                  <><LogIn size={14} /> Sign In</>
+                )}
+              </button>
+            </form>
+
+            <div className="login-divider">
+              <div className="divider-line" />
+              <span className="divider-text">new to the shelves?</span>
+              <div className="divider-line" />
+            </div>
+
+            <Link href="/auth/signup" className="btn-secondary">
+              Create an Account
+            </Link>
+
+            <Link href="/" className="back-link">← Back to Home</Link>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
