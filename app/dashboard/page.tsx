@@ -9,6 +9,9 @@ import {
   Bookmark,
   Loader,
   ExternalLink,
+  SlidersHorizontal,
+  ChevronDown,
+  ArrowUp,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -23,27 +26,312 @@ import {
   UserProfile,
 } from "../types/types";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type SortMode = "latest" | "top" | "discussed";
+type FilterTab = "All" | "Fiction" | "Non-fiction" | "Poetry" | "Reviews";
+
+// ─── Skeleton card ────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="bg-[#111] border border-[#1f1f1f] p-5 animate-pulse">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-8 h-8 rounded-full bg-[#1e1e1e] flex-shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-2.5 bg-[#1e1e1e] rounded w-1/3" />
+          <div className="h-2 bg-[#1e1e1e] rounded w-1/4" />
+        </div>
+      </div>
+      <div className="h-4 bg-[#1e1e1e] rounded w-3/4 mb-3" />
+      <div className="space-y-2 mb-4">
+        <div className="h-2.5 bg-[#1e1e1e] rounded w-full" />
+        <div className="h-2.5 bg-[#1e1e1e] rounded w-5/6" />
+      </div>
+      <div className="flex gap-4">
+        <div className="h-2.5 bg-[#1e1e1e] rounded w-10" />
+        <div className="h-2.5 bg-[#1e1e1e] rounded w-10" />
+        <div className="h-2.5 bg-[#1e1e1e] rounded w-12" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Sort dropdown ────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "latest", label: "Latest" },
+  { value: "top", label: "Top rated" },
+  { value: "discussed", label: "Most discussed" },
+];
+
+function SortDropdown({
+  value,
+  onChange,
+}: {
+  value: SortMode;
+  onChange: (v: SortMode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const current = SORT_OPTIONS.find((o) => o.value === value)!;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-xs text-neutral-400 bg-[#161616] border border-[#272727] px-3 py-1.5 hover:border-[#3a3a3a] hover:text-white transition-all"
+      >
+        <SlidersHorizontal size={11} strokeWidth={2} />
+        {current.label}
+        <ChevronDown
+          size={11}
+          strokeWidth={2}
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-[#161616] border border-[#272727] z-20 min-w-[140px] shadow-xl">
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-[#1e1e1e] ${
+                value === opt.value
+                  ? "text-white font-medium"
+                  : "text-neutral-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Filter tabs ──────────────────────────────────────────────────────────────
+
+const FILTER_TABS: FilterTab[] = [
+  "All",
+  "Fiction",
+  "Non-fiction",
+  "Poetry",
+  "Reviews",
+];
+
+// ─── Post card ────────────────────────────────────────────────────────────────
+
+function PostCard({
+  post,
+  interactions,
+  onLike,
+  onBookmark,
+  router,
+}: {
+  post: FeedPost;
+  interactions: { liked: boolean; bookmarked: boolean; likeCount: number };
+  onLike: (id: string, e: React.MouseEvent) => void;
+  onBookmark: (id: string, e: React.MouseEvent) => void;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const isExternal = post.isExternal;
+
+  const inner = (
+    <article
+      className="bg-[#111] border border-[#1f1f1f] overflow-hidden hover:border-[#2a2a2a] transition-all cursor-pointer group my-6"
+    >
+      {/* Cover image */}
+      {post.cover_image_url && (
+        <div className="relative w-full h-44">
+          <Image
+            src={post.cover_image_url}
+            alt={post.cover_image_caption || post.title}
+            fill
+            className="object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+          />
+          {isExternal && (
+            <div className="absolute top-3 right-3 bg-black/60 px-2 py-0.5 flex items-center gap-1">
+              <ExternalLink size={10} className="text-neutral-400" />
+              <span className="text-xs text-neutral-400">{post.source}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="p-5">
+        {/* Author row */}
+        <div className="flex items-start justify-between mb-3.5">
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <div className="w-8 h-8 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-neutral-400 text-[10px] font-semibold flex-shrink-0">
+              {post.avatar}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-neutral-300 truncate leading-tight">
+                {post.author}
+              </p>
+              <div className="flex items-center gap-1.5 text-[11px] text-neutral-600 mt-0.5">
+                <span>{post.timestamp}</span>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <Clock size={10} strokeWidth={1.5} />
+                  {post.readTime}
+                </span>
+              </div>
+            </div>
+          </div>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 bg-[#1a1a1a] border border-[#272727] px-2.5 py-1 flex-shrink-0 ml-3">
+            {post.genre}
+          </span>
+        </div>
+
+        {/* Title + excerpt */}
+        <h3 className="text-base font-semibold text-white leading-snug mb-2 tracking-tight group-hover:text-neutral-200 transition-colors break-words">
+          {post.title}
+          {isExternal && !post.cover_image_url && (
+            <ExternalLink
+              size={12}
+              className="inline ml-1.5 text-neutral-600 relative -top-0.5"
+            />
+          )}
+        </h3>
+        <p className="text-sm text-neutral-500 leading-relaxed mb-4 line-clamp-2 break-words">
+          {post.excerpt}
+        </p>
+
+        {/* Actions */}
+        <div
+          className="flex items-center gap-5 text-neutral-600"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Like */}
+          {isExternal ? (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Heart size={13} strokeWidth={1.5} />
+              <span>{post.likes}</span>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => onLike(post.id, e)}
+              className={`flex items-center gap-1.5 text-xs transition-colors ${
+                interactions.liked
+                  ? "text-red-400"
+                  : "hover:text-neutral-300"
+              }`}
+            >
+              <Heart
+                size={13}
+                strokeWidth={1.5}
+                fill={interactions.liked ? "currentColor" : "none"}
+              />
+              <span>{interactions.likeCount ?? post.likes_count}</span>
+            </button>
+          )}
+
+          {/* Comments */}
+          <button
+            onClick={(e) => {
+              if (!isExternal) {
+                e.preventDefault();
+                router.push(`/dashboard/posts/${post.id}`);
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs hover:text-neutral-300 transition-colors"
+          >
+            <MessageCircle size={13} strokeWidth={1.5} />
+            <span>{post.comments_count ?? post.comments}</span>
+          </button>
+
+          {/* Bookmark */}
+          {isExternal ? (
+            <div className="flex items-center gap-1.5 text-xs text-neutral-700 cursor-not-allowed select-none">
+              <Bookmark size={13} strokeWidth={1.5} />
+              <span>External</span>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => onBookmark(post.id, e)}
+              className={`flex items-center gap-1.5 text-xs transition-colors ${
+                interactions.bookmarked
+                  ? "text-amber-400"
+                  : "hover:text-neutral-300"
+              }`}
+            >
+              <Bookmark
+                size={13}
+                strokeWidth={1.5}
+                fill={interactions.bookmarked ? "currentColor" : "none"}
+              />
+              <span>{interactions.bookmarked ? "Saved" : "Save"}</span>
+            </button>
+          )}
+
+          {/* Read time right-aligned */}
+          <span className="ml-auto text-[11px] text-neutral-700">
+            {post.readTime}
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+
+  if (isExternal) {
+    return (
+      <div
+        key={post.id}
+        onClick={() => post.link && window.open(post.link, "_blank")}
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <Link key={post.id} href={`/dashboard/posts/${post.id}`}>
+      {inner}
+    </Link>
+  );
+}
+
+// ─── Main dashboard ───────────────────────────────────────────────────────────
+
 export default function SMLDashboard() {
   const router = useRouter();
+
   const [trendingBooks, setTrendingBooks] = useState<TrendingBook[]>([]);
-  const [loadingTrending, setLoadingTrending] = useState<boolean>(true);
+  const [loadingTrending, setLoadingTrending] = useState(true);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [loadingUser, setLoadingUser] = useState<boolean>(true);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState<boolean>(true);
-  const [page, setPage] = useState<number>(1);
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [page, setPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [sortMode, setSortMode] = useState<SortMode>("latest");
+  const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const [postInteractions, setPostInteractions] = useState<{
-    [postId: string]: {
-      liked: boolean;
-      bookmarked: boolean;
-      likeCount: number;
-    };
+    [postId: string]: { liked: boolean; bookmarked: boolean; likeCount: number };
   }>({});
 
   const observerTarget = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  // ── Static data ────────────────────────────────────────────────────────────
 
   const internalTrending: TrendingTopic[] = [
     { tag: "literary-fiction", posts: "2.3k", growth: "+12%" },
@@ -74,57 +362,65 @@ export default function SMLDashboard() {
     },
   ];
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   const getRelativeTime = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (diffInSeconds < 60) return "just now";
-    if (diffInSeconds < 3600)
-      return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-    if (diffInSeconds < 86400)
-      return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-    if (diffInSeconds < 604800)
-      return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
     return date.toLocaleDateString();
   };
 
   const generateAvatar = (name: string): string => {
     if (!name) return "??";
-    const nameParts = name.trim().split(" ");
-    if (nameParts.length > 1) {
-      return `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
+    const parts = name.trim().split(" ");
+    return parts.length > 1
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : name.substring(0, 2).toUpperCase();
   };
+
+  // ── Sorting ────────────────────────────────────────────────────────────────
+
+  const sortedPosts = [...feedPosts].sort((a, b) => {
+    if (sortMode === "latest")
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (sortMode === "top")
+      return (b.likes_count || 0) - (a.likes_count || 0);
+    if (sortMode === "discussed")
+      return (b.comments_count || 0) - (a.comments_count || 0);
+    return 0;
+  });
+
+  // ── Filtering ──────────────────────────────────────────────────────────────
+
+  const filteredPosts =
+    activeFilter === "All"
+      ? sortedPosts
+      : sortedPosts.filter(
+          (p) => p.genre?.toLowerCase() === activeFilter.toLowerCase()
+        );
+
+  // ── Interactions ───────────────────────────────────────────────────────────
 
   const fetchPostInteractionStatus = async (postId: string) => {
     try {
-
       const response = await fetch(`/api/posts/${postId}`, {
         credentials: "include",
       });
-
-
       if (response.ok) {
         const data = await response.json();
-      
-
         return {
           liked: data.user_liked || false,
           bookmarked: data.user_bookmarked || false,
           likeCount: data.likes_count || 0,
         };
-      } else {
-        console.error(
-          `[FETCH INTERACTION] Failed to fetch, status: ${response.status}`
-        );
       }
     } catch (error) {
-      console.error(
-        `[FETCH INTERACTION] Error fetching post ${postId}:`,
-        error
-      );
+      console.error(`Error fetching post ${postId}:`, error);
     }
     return null;
   };
@@ -132,9 +428,8 @@ export default function SMLDashboard() {
   const handleLike = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
-    const currentState = postInteractions[postId];
-    const newLiked = !currentState?.liked;
+    const current = postInteractions[postId];
+    const newLiked = !current?.liked;
 
     setPostInteractions((prev) => ({
       ...prev,
@@ -148,46 +443,28 @@ export default function SMLDashboard() {
     }));
 
     try {
-      const response = await fetch(`/api/posts/${postId}/like`, {
+      const res = await fetch(`/api/posts/${postId}/like`, {
         method: newLiked ? "POST" : "DELETE",
         credentials: "include",
       });
-
-      if (!response.ok) {
-        console.error("Like API failed");
-        setPostInteractions((prev) => ({
-          ...prev,
-          [postId]: currentState,
-        }));
+      if (!res.ok) {
+        setPostInteractions((prev) => ({ ...prev, [postId]: current }));
       } else {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        const updatedStatus = await fetchPostInteractionStatus(postId);
-        if (updatedStatus) {
-          console.log(`Updated status for ${postId}:`, updatedStatus);
-          setPostInteractions((prev) => ({
-            ...prev,
-            [postId]: updatedStatus,
-          }));
-        }
+        await new Promise((r) => setTimeout(r, 100));
+        const updated = await fetchPostInteractionStatus(postId);
+        if (updated)
+          setPostInteractions((prev) => ({ ...prev, [postId]: updated }));
       }
-    } catch (error) {
-      console.error("Error toggling like:", error);
-      setPostInteractions((prev) => ({
-        ...prev,
-        [postId]: currentState,
-      }));
+    } catch {
+      setPostInteractions((prev) => ({ ...prev, [postId]: current }));
     }
   };
-
-  
 
   const handleBookmark = async (postId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
-    const currentState = postInteractions[postId];
-    const newBookmarked = !currentState?.bookmarked;
+    const current = postInteractions[postId];
+    const newBookmarked = !current?.bookmarked;
 
     setPostInteractions((prev) => ({
       ...prev,
@@ -199,51 +476,32 @@ export default function SMLDashboard() {
     }));
 
     try {
-      const url = `/api/posts/${postId}/bookmark`;
-      const method = newBookmarked ? "POST" : "DELETE";
-
-
-      const response = await fetch(url, {
-        method: method,
+      const res = await fetch(`/api/posts/${postId}/bookmark`, {
+        method: newBookmarked ? "POST" : "DELETE",
         credentials: "include",
       });
-
-      if (!response.ok) {
-        console.error(`[BOOKMARK API] Failed with status ${response.status}`);
-        setPostInteractions((prev) => ({
-          ...prev,
-          [postId]: currentState,
-        }));
+      if (!res.ok) {
+        setPostInteractions((prev) => ({ ...prev, [postId]: current }));
       } else {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        const updatedStatus = await fetchPostInteractionStatus(postId);
-
-        if (updatedStatus) {
-          setPostInteractions((prev) => ({
-            ...prev,
-            [postId]: updatedStatus,
-          }));
-        } else {
-          console.error(`[BOOKMARK API] Failed to get updated status`);
-        }
+        await new Promise((r) => setTimeout(r, 100));
+        const updated = await fetchPostInteractionStatus(postId);
+        if (updated)
+          setPostInteractions((prev) => ({ ...prev, [postId]: updated }));
       }
-    } catch (error) {
-      console.error(`[BOOKMARK ERROR] Exception occurred:`, error);
-      setPostInteractions((prev) => ({
-        ...prev,
-        [postId]: currentState,
-      }));
+    } catch {
+      setPostInteractions((prev) => ({ ...prev, [postId]: current }));
     }
   };
-  
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
+
   const fetchInternalPosts = async (pageNum: number) => {
     try {
       const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
       const data = await response.json();
 
       if (data.success && data.posts) {
-        const internalPosts: FeedPost[] = data.posts.map((post: any) => ({
+        const posts: FeedPost[] = data.posts.map((post: any) => ({
           id: post.id,
           title: post.title,
           author: post.author_name || "Anonymous",
@@ -264,135 +522,97 @@ export default function SMLDashboard() {
           cover_image_caption: post.cover_image_caption || null,
         }));
 
-   
-
         const interactions: typeof postInteractions = {};
         await Promise.all(
-          internalPosts.map(async (post) => {
-            const status = await fetchPostInteractionStatus(post.id);
-            if (status) {
-              interactions[post.id] = status;
-            }
+          posts.map(async (p) => {
+            const s = await fetchPostInteractionStatus(p.id);
+            if (s) interactions[p.id] = s;
           })
         );
         setPostInteractions((prev) => ({ ...prev, ...interactions }));
 
-        return {
-          posts: internalPosts,
-          hasMore: data.hasMore || false,
-        };
+        return { posts, hasMore: data.hasMore || false };
       }
-
       return { posts: [], hasMore: false };
     } catch (error) {
-      console.error("Error fetching internal posts:", error);
+      console.error("Error fetching posts:", error);
       return { posts: [], hasMore: false };
     }
   };
 
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const init = async () => {
       setLoadingPosts(true);
-
-      const [internalData] = await Promise.all([
-        fetchInternalPosts(1),
-      ]);
-
-      const allPosts = [...internalData.posts].sort(
-        (a, b) => {
-          const dateA = new Date(a.created_at).getTime();
-          const dateB = new Date(b.created_at).getTime();
-          return dateB - dateA;
-        }
-      );
-
-      setFeedPosts(allPosts);
-      setHasMore(internalData.hasMore);
+      const { posts, hasMore } = await fetchInternalPosts(1);
+      setFeedPosts(posts);
+      setHasMore(hasMore);
       setLoadingPosts(false);
     };
-
-    fetchInitialData();
+    init();
   }, []);
 
   const loadMorePosts = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
-
     setIsLoadingMore(true);
     const nextPage = page + 1;
-
-    const internalData = await fetchInternalPosts(nextPage);
-
-    if (internalData.posts.length > 0) {
-      setFeedPosts((prev) => [...prev, ...internalData.posts]);
+    const { posts, hasMore: more } = await fetchInternalPosts(nextPage);
+    if (posts.length > 0) {
+      setFeedPosts((prev) => [...prev, ...posts]);
       setPage(nextPage);
-      setHasMore(internalData.hasMore);
+      setHasMore(more);
     } else {
       setHasMore(false);
     }
-
     setIsLoadingMore(false);
   }, [page, isLoadingMore, hasMore]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
-          loadMorePosts();
-        }
+      ([entry]) => {
+        if (entry.isIntersecting && hasMore && !isLoadingMore) loadMorePosts();
       },
       { threshold: 0.1 }
     );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
+    if (observerTarget.current) observer.observe(observerTarget.current);
     return () => observer.disconnect();
   }, [loadMorePosts, hasMore, isLoadingMore]);
 
+  // Trending books
   useEffect(() => {
     const fetchTrending = async () => {
       setLoadingTrending(true);
       try {
-        const response = await fetch(
+        const res = await fetch(
           "https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json?api-key=DEMO_KEY"
         );
-        const data = await response.json();
-
-        if (data.results && data.results.books) {
-          const books: TrendingBook[] = data.results.books
-            .slice(0, 5)
-            .map((book: any) => ({
-              title: book.title,
-              author: book.author,
+        const data = await res.json();
+        if (data.results?.books) {
+          setTrendingBooks(
+            data.results.books.slice(0, 5).map((b: any) => ({
+              title: b.title,
+              author: b.author,
               category: "Fiction",
               discussions: Math.floor(Math.random() * 500) + 100,
-              link: book.amazon_product_url,
-            }));
-
-          setTrendingBooks(books);
+              link: b.amazon_product_url,
+            }))
+          );
         }
-      } catch (error) {
-        console.error("Error fetching trending books:", error);
+      } catch (e) {
+        console.error("Error fetching trending:", e);
       } finally {
         setLoadingTrending(false);
       }
     };
-
     fetchTrending();
   }, []);
 
+  // User
   useEffect(() => {
     const fetchUser = async () => {
-      setLoadingUser(true);
       try {
-        const response = await fetch("/api/user", {
-          method: "GET",
-          credentials: "include",
-        });
-
-        if (response.ok) {
-          const data = await response.json();
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
           if (data.authenticated && data.user) {
             setUser({
               name: data.user.full_name || "User",
@@ -404,318 +624,143 @@ export default function SMLDashboard() {
             });
           }
         }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      } finally {
-        setLoadingUser(false);
+      } catch (e) {
+        console.error("Error fetching user:", e);
       }
     };
-
     fetchUser();
+  }, []);
+
+  // Back-to-top visibility
+  useEffect(() => {
+    const handleScroll = () => setShowBackToTop(window.scrollY > 600);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const handleSignOut = async () => {
     try {
-      const response = await fetch("/api/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        window.location.href = "/";
-      }
-    } catch (error) {
-      console.error("Error signing out:", error);
+      const res = await fetch("/api/logout", { method: "POST", credentials: "include" });
+      if (res.ok) window.location.href = "/";
+    } catch (e) {
+      console.error("Error signing out:", e);
     }
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-200">
+    <div className="min-h-screen bg-[#0a0a0a] text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      <main className="pt-16 lg:pt-0 lg:ml-72 lg:mr-96 min-h-screen">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main ref={mainRef} className="pt-16 lg:pt-0 lg:ml-72 lg:mr-96 min-h-screen">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+
+          {/* ── Welcome banner (only when logged in) ── */}
           {user && (
-            <div className="mb-6 sm:mb-8 bg-gradient-to-r from-neutral-900 to-neutral-800 border border-neutral-800 rounded-xl p-6">
-              <h1 className="text-2xl sm:text-3xl font-serif text-neutral-100 mb-2">
-                Welcome back, {user.name}!
-              </h1>
-              <p className="text-neutral-400 text-sm">
-                Discover new stories and share your thoughts with the community
-              </p>
+            <div className="mb-8 bg-[#111] border border-[#1f1f1f] p-5 flex items-center justify-between">
+              <div>
+                <h1 className="text-lg font-semibold text-white tracking-tight">
+                  Good {getGreeting()}, {user.name.split(" ")[0]}
+                </h1>
+                <p className="text-sm text-neutral-500 mt-0.5">
+                  Discover new stories and share your thoughts
+                </p>
+              </div>
+              <div className="w-9 h-9 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-neutral-400 text-xs font-semibold flex-shrink-0">
+                {user.avatar}
+              </div>
             </div>
           )}
 
-          <div className="mb-6 sm:mb-8">
-            <h2 className="text-2xl sm:text-3xl font-serif text-neutral-100 mb-2">
-              Your Feed
-            </h2>
-            <p className="text-neutral-500 text-sm">
-              {feedPosts.length} posts sorted by latest
-            </p>
+          {/* ── Feed header ── */}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-white tracking-tight">
+                Your Feed
+              </h2>
+              <p className="text-xs text-neutral-600 mt-0.5">
+                {filteredPosts.length} post{filteredPosts.length !== 1 ? "s" : ""} · {SORT_OPTIONS.find(o => o.value === sortMode)?.label.toLowerCase()}
+              </p>
+            </div>
+            <SortDropdown value={sortMode} onChange={setSortMode} />
           </div>
 
+          {/* ── Filter tabs ── */}
+          <div className="flex border-b border-[#1f1f1f] mb-6 overflow-x-auto scrollbar-none">
+            {FILTER_TABS.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveFilter(tab)}
+                className={`text-xs font-medium px-3.5 py-2.5 border-b-2 whitespace-nowrap transition-all flex-shrink-0 ${
+                  activeFilter === tab
+                    ? "border-white text-white"
+                    : "border-transparent text-neutral-500 hover:text-neutral-300"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Feed content ── */}
           {loadingPosts ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <Loader
-                className="animate-spin text-neutral-600 mb-4"
-                size={40}
-              />
-              <p className="text-neutral-500 text-sm">Loading your feed...</p>
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
             </div>
-          ) : feedPosts.length === 0 ? (
-            <div className="text-center py-16">
-              <BookOpen size={48} className="mx-auto mb-4 text-neutral-700" />
-              <h3 className="text-xl text-neutral-300 mb-2">No posts yet</h3>
-              <p className="text-neutral-500">
-                Be the first to share something!
+          ) : filteredPosts.length === 0 ? (
+            <div className="text-center py-20 border border-[#1a1a1a] bg-[#111]">
+              <BookOpen
+                size={36}
+                strokeWidth={1.2}
+                className="mx-auto mb-4 text-neutral-700"
+              />
+              <h3 className="text-sm font-medium text-neutral-400 mb-1">
+                {activeFilter === "All" ? "No posts yet" : `No ${activeFilter} posts yet`}
+              </h3>
+              <p className="text-xs text-neutral-600">
+                {activeFilter === "All"
+                  ? "Be the first to share something with the community."
+                  : "Try a different filter or check back later."}
               </p>
             </div>
           ) : (
             <>
-              <div className="space-y-6">
-                {feedPosts.map((post) =>
-                  post.isExternal ? (
-                    <article
-                      key={post.id}
-                      onClick={() =>
-                        post.link && window.open(post.link, "_blank")
+              <div className="space-y-3">
+                {filteredPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    interactions={
+                      postInteractions[post.id] || {
+                        liked: false,
+                        bookmarked: false,
+                        likeCount: post.likes_count || 0,
                       }
-                      className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all cursor-pointer"
-                    >
-                      {post.cover_image_url && (
-                        <div className="relative w-full h-48 sm:h-64">
-                          <Image
-                            src={post.cover_image_url}
-                            alt={post.title}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      )}
+                    }
+                    onLike={handleLike}
+                    onBookmark={handleBookmark}
+                    router={router}
+                  />
+                ))}
+              </div>
 
-                      <div className="p-6">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-start space-x-3 flex-1 min-w-0">
-                            <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
-                              {post.avatar}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-neutral-300 text-sm truncate">
-                                {post.author}
-                              </p>
-                              <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
-                                <span className="whitespace-nowrap">
-                                  {post.timestamp}
-                                </span>
-                                <span>·</span>
-                                <span className="flex items-center whitespace-nowrap">
-                                  <Clock
-                                    size={12}
-                                    className="mr-1"
-                                    strokeWidth={1.5}
-                                  />
-                                  {post.readTime}
-                                </span>
-                                {post.source && (
-                                  <>
-                                    <span>·</span>
-                                    <span className="text-neutral-500 whitespace-nowrap">
-                                      {post.source}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-3">
-                            {post.genre}
-                          </span>
-                        </div>
-
-                        <div>
-                          <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words leading-snug flex items-start">
-                            <span className="flex-1">{post.title}</span>
-                            {post.link && (
-                              <ExternalLink
-                                size={16}
-                                className="ml-2 text-neutral-600 flex-shrink-0 mt-1"
-                              />
-                            )}
-                          </h3>
-                          <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
-                            {post.excerpt}
-                          </p>
-                        </div>
-
-                        <div
-                          className="flex items-center space-x-6 text-sm text-neutral-500"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Heart size={16} strokeWidth={1.5} />
-                            <span>{post.likes}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <MessageCircle size={16} strokeWidth={1.5} />
-                            <span>{post.comments}</span>
-                          </div>
-                          {/* External posts don't support bookmarking */}
-                          <div className="flex items-center space-x-2 text-neutral-600 cursor-not-allowed">
-                            <Bookmark size={16} strokeWidth={1.5} />
-                            <span>External</span>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  ) : (
-                    <div key={post.id}>
-                      <Link href={`/dashboard/posts/${post.id}`}>
-                        <article className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-all cursor-pointer">
-                          {post.cover_image_url && (
-                            <div className="relative w-full h-48 sm:h-64">
-                              <Image
-                                src={post.cover_image_url}
-                                alt={post.cover_image_caption || post.title}
-                                fill
-                                className="object-cover"
-                              />
-                            </div>
-                          )}
-
-                          <div className="p-6">
-                            <div className="flex items-start justify-between mb-4">
-                              <div className="flex items-start space-x-3 flex-1 min-w-0">
-                                <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
-                                  {post.avatar}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-neutral-300 text-sm truncate">
-                                    {post.author}
-                                  </p>
-                                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-neutral-600">
-                                    <span className="whitespace-nowrap">
-                                      {post.timestamp}
-                                    </span>
-                                    <span>·</span>
-                                    <span className="flex items-center whitespace-nowrap">
-                                      <Clock
-                                        size={12}
-                                        className="mr-1"
-                                        strokeWidth={1.5}
-                                      />
-                                      {post.readTime}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <span className="px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ml-3">
-                                {post.genre}
-                              </span>
-                            </div>
-
-                            <div>
-                              <h3 className="text-xl font-serif text-neutral-100 mb-3 hover:text-neutral-300 transition break-words leading-snug">
-                                {post.title}
-                              </h3>
-                              <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-3">
-                                {post.excerpt}
-                              </p>
-                            </div>
-
-                            <div
-                              className="flex items-center space-x-6 text-sm text-neutral-500"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <button
-                                onClick={(e) => handleLike(post.id, e)}
-                                className={`flex items-center space-x-2 transition ${
-                                  postInteractions[post.id]?.liked
-                                    ? "text-red-500"
-                                    : "hover:text-red-400"
-                                }`}
-                              >
-                                <Heart
-                                  size={16}
-                                  strokeWidth={1.5}
-                                  fill={
-                                    postInteractions[post.id]?.liked
-                                      ? "currentColor"
-                                      : "none"
-                                  }
-                                />
-                                <span>
-                                  {postInteractions[post.id]?.likeCount ??
-                                    post.likes_count}
-                                </span>
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  router.push(`/dashboard/posts/${post.id}`);
-                                }}
-                                className="flex items-center space-x-2 hover:text-neutral-300 transition"
-                              >
-                                <MessageCircle size={16} strokeWidth={1.5} />
-                                <span>{post.comments_count}</span>
-                              </button>
-                              <button
-                                onClick={(e) => handleBookmark(post.id, e)}
-                                className={`flex items-center space-x-2 transition ${
-                                  postInteractions[post.id]?.bookmarked
-                                    ? "text-amber-500"
-                                    : "hover:text-neutral-300"
-                                }`}
-                                title={
-                                  postInteractions[post.id]?.bookmarked
-                                    ? "Remove bookmark"
-                                    : "Save post"
-                                }
-                              >
-                                <Bookmark
-                                  size={16}
-                                  strokeWidth={1.5}
-                                  fill={
-                                    postInteractions[post.id]?.bookmarked
-                                      ? "currentColor"
-                                      : "none"
-                                  }
-                                />
-                                <span>
-                                  {postInteractions[post.id]?.bookmarked
-                                    ? "Saved"
-                                    : "Save"}
-                                </span>
-                              </button>
-                            </div>
-                          </div>
-                        </article>
-                      </Link>
-                    </div>
-                  )
+              {/* Infinite scroll trigger */}
+              <div ref={observerTarget} className="py-6">
+                {isLoadingMore && (
+                  <div className="flex items-center justify-center gap-2 text-neutral-600">
+                    <Loader className="animate-spin" size={16} />
+                    <span className="text-xs">Loading more…</span>
+                  </div>
                 )}
               </div>
 
-              {feedPosts.length > 0 && hasMore && (
-                <div ref={observerTarget} className="py-8">
-                  {isLoadingMore && (
-                    <div className="flex flex-col items-center justify-center">
-                      <Loader
-                        className="animate-spin text-neutral-600 mb-2"
-                        size={32}
-                      />
-                      <p className="text-neutral-500 text-sm">
-                        Loading more posts...
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!hasMore && feedPosts.length > 0 && (
-                <div className="text-center py-8 text-neutral-600 text-sm">
-                  <p>You've reached the end of your feed</p>
-                </div>
+              {!hasMore && (
+                <p className="text-center text-xs text-neutral-700 pb-8">
+                  You've reached the end of your feed
+                </p>
               )}
             </>
           )}
@@ -728,6 +773,26 @@ export default function SMLDashboard() {
         internalTrending={internalTrending}
         suggestedWriters={suggestedWriters}
       />
+
+      {/* ── Back to top ── */}
+      {showBackToTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 right-6 w-9 h-9 bg-[#161616] border border-[#2a2a2a] flex items-center justify-center text-neutral-400 hover:text-white hover:border-[#444] transition-all z-50 shadow-xl"
+          title="Back to top"
+        >
+          <ArrowUp size={14} strokeWidth={2} />
+        </button>
+      )}
     </div>
   );
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
 }
