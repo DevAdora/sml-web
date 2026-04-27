@@ -153,20 +153,18 @@ export function RightSidebar({
                 onClick={() => book.link && window.open(book.link, "_blank")}
                 className="w-full flex items-start gap-3 py-2.5 text-left group hover:opacity-75 transition-opacity"
               >
-                {/* Rank number */}
                 <span className="text-[10px] font-bold text-neutral-700 w-3.5 flex-shrink-0 mt-0.5 tabular-nums">
                   {idx + 1}
                 </span>
 
-                {/* Book info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium text-neutral-400 group-hover:text-neutral-200 transition-colors leading-snug truncate">
                     {book.title}
                   </p>
-                  <p className="text-[10px] text-neutral-600 mt-0.5 truncate">
+                  <p className="text-[12px] text-neutral-600 mt-0.5 truncate">
                     {book.author}
                   </p>
-                  <p className="text-[10px] text-neutral-700 mt-1">
+                  <p className="text-[12px] text-neutral-700 mt-1">
                     {book.discussions} discussions
                   </p>
                 </div>
@@ -199,11 +197,11 @@ export function RightSidebar({
                 <p className="text-[16px] font-medium text-neutral-400 group-hover:text-neutral-200 transition-colors truncate">
                   #{topic.tag}
                 </p>
-                <p className="text-[10px] text-neutral-700 mt-0.5">
+                <p className="text-[12px] text-neutral-700 mt-0.5">
                   {topic.posts} posts
                 </p>
               </div>
-              <span className="text-[10px] font-semibold text-emerald-500 flex-shrink-0 ml-3 tabular-nums">
+              <span className="text-[12px] font-semibold text-emerald-500 flex-shrink-0 ml-3 tabular-nums">
                 {topic.growth}
               </span>
             </button>
