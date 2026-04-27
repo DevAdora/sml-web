@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, LogIn, AlertCircle, BookOpen, Users, TrendingUp } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,400 +36,428 @@ export default function LoginPage() {
     router.refresh();
   };
 
+  const features = [
+    {
+      icon: <BookOpen size={12} strokeWidth={1.5} />,
+      title: "Deep reading lists",
+      sub: "Organize your shelf, track progress, annotate",
+      active: true,
+    },
+    {
+      icon: <Users size={12} strokeWidth={1.5} />,
+      title: "Writer community",
+      sub: "Follow voices that shape how you read",
+      active: false,
+    },
+    {
+      icon: <TrendingUp size={12} strokeWidth={1.5} />,
+      title: "Trending in SML",
+      sub: "Discover what readers are talking about",
+      active: false,
+    },
+  ];
+
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
-        .login-root {
+        .auth-root {
           min-height: 100vh;
-          background: #0a0806;
+          background: #0a0a0a;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 1.5rem;
-          font-family: 'Crimson Pro', Georgia, serif;
-          position: relative;
-          overflow: hidden;
+          font-family: Inter, -apple-system, sans-serif;
         }
 
-        .login-root::before {
-          content: '';
-          position: fixed;
-          inset: 0;
-          background:
-            radial-gradient(ellipse 70% 50% at 15% 15%, rgba(180, 120, 30, 0.07) 0%, transparent 60%),
-            radial-gradient(ellipse 50% 70% at 85% 85%, rgba(100, 60, 10, 0.06) 0%, transparent 60%);
-          pointer-events: none;
-        }
-
-        .login-split {
+        .auth-card {
           display: flex;
           width: 100%;
           max-width: 900px;
           min-height: 560px;
-          background: #100e09;
-          border: 1px solid rgba(255, 200, 80, 0.08);
-          box-shadow: 0 8px 80px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
-          position: relative;
-          z-index: 1;
+          background: #0a0a0a;
+          border: 1px solid #1f1f1f;
         }
 
-        .login-panel-left {
+        /* Left panel */
+        .auth-left {
           width: 42%;
-          background: #080604;
+          background: #111;
           position: relative;
           overflow: hidden;
           display: flex;
           flex-direction: column;
-          justify-content: flex-end;
+          justify-content: space-between;
           padding: 2.5rem;
           flex-shrink: 0;
-          border-right: 1px solid rgba(255, 200, 80, 0.06);
+          border-right: 1px solid #1f1f1f;
         }
 
-        .panel-glow {
-          position: absolute; inset: 0;
-          background:
-            radial-gradient(ellipse 120% 55% at 50% 0%, rgba(180, 120, 30, 0.14) 0%, transparent 60%),
-            radial-gradient(ellipse 70% 100% at 80% 100%, rgba(80, 50, 10, 0.2) 0%, transparent 55%);
-        }
-
-        .panel-lines {
-          position: absolute; inset: 0;
-          background-image: repeating-linear-gradient(
-            0deg,
-            transparent, transparent 28px,
-            rgba(255, 200, 80, 0.025) 28px,
-            rgba(255, 200, 80, 0.025) 29px
-          );
-        }
-
-        .panel-bigquote {
+        .left-dots {
           position: absolute;
-          top: 1.5rem; left: 2rem;
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 9rem;
-          line-height: 0.8;
-          color: rgba(200, 150, 50, 0.07);
-          font-weight: 300;
-          user-select: none;
+          inset: 0;
+          background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+          background-size: 24px 24px;
           pointer-events: none;
         }
 
-        .panel-content { position: relative; z-index: 1; }
-
-        .panel-rule {
-          width: 2rem; height: 1px;
-          background: rgba(200, 150, 50, 0.28);
-          margin-bottom: 0.875rem;
+        .left-fade {
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          height: 180px;
+          background: linear-gradient(to top, #111, transparent);
+          pointer-events: none;
         }
 
-        .panel-quote {
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 1.1rem;
-          font-style: italic;
-          font-weight: 300;
-          color: rgba(230, 200, 140, 0.82);
-          line-height: 1.75;
-          margin-bottom: 0.75rem;
-        }
+        .left-top { position: relative; z-index: 1; }
 
-        .panel-attr {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 0.7rem;
-          letter-spacing: 0.14em;
+        .left-eyebrow {
+          font-size: 0.65rem;
+          font-weight: 500;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
-          color: rgba(200, 150, 50, 0.5);
+          color: rgba(255,255,255,0.28);
+          margin-bottom: 1.5rem;
         }
 
-        .login-panel-right {
+        .feature-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.75rem;
+          margin-bottom: 1.25rem;
+          opacity: 0.35;
+          transition: opacity 0.2s;
+        }
+
+        .feature-item.active { opacity: 1; }
+
+        .feat-icon {
+          width: 1.75rem;
+          height: 1.75rem;
+          background: #1a1a1a;
+          border: 1px solid #2a2a2a;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          margin-top: 1px;
+          color: rgba(255,255,255,0.4);
+        }
+
+        .feature-item.active .feat-icon {
+          background: #1e1e1e;
+          border-color: #333;
+          color: #fff;
+        }
+
+        .feat-title {
+          font-size: 0.8rem;
+          font-weight: 500;
+          color: rgba(255,255,255,0.45);
+          margin-bottom: 0.15rem;
+        }
+
+        .feature-item.active .feat-title { color: #fff; }
+
+        .feat-sub {
+          font-size: 0.72rem;
+          color: rgba(255,255,255,0.22);
+          line-height: 1.45;
+          font-weight: 400;
+        }
+
+        .feature-item.active .feat-sub { color: rgba(255,255,255,0.38); }
+
+        .left-bottom { position: relative; z-index: 1; }
+
+        .left-wordmark {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #fff;
+          letter-spacing: -0.01em;
+          margin-bottom: 0.2rem;
+        }
+
+        .left-tagline {
+          font-size: 0.72rem;
+          color: rgba(255,255,255,0.25);
+          font-weight: 400;
+        }
+
+        /* Right form */
+        .auth-right {
           flex: 1;
-          padding: 3rem;
+          padding: 2.5rem 3rem;
           display: flex;
           flex-direction: column;
           justify-content: center;
         }
 
-        .login-wordmark {
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 2.1rem;
+        .form-heading {
+          font-size: 1.35rem;
+          font-weight: 600;
+          color: #fff;
+          letter-spacing: -0.02em;
+          margin-bottom: 0.3rem;
+        }
+
+        .form-subheading {
+          font-size: 0.8rem;
+          color: rgba(255,255,255,0.35);
+          margin-bottom: 1.75rem;
           font-weight: 400;
-          letter-spacing: 0.08em;
-          color: #e8d5a0;
-          margin-bottom: 0.2rem;
+          line-height: 1.5;
         }
 
-        .login-tagline {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 0.82rem;
-          font-style: italic;
-          color: rgba(200, 150, 60, 0.6);
-          margin-bottom: 2.25rem;
-        }
-
-        .login-form-title {
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 1.4rem;
-          font-weight: 500;
-          color: #dfc47e;
-          margin-bottom: 1.5rem;
-        }
-
-        .form-group { margin-bottom: 1.1rem; }
-
-        .form-label {
+        .field-label {
           display: block;
-          font-family: 'Crimson Pro', Georgia, serif;
           font-size: 0.7rem;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: rgba(200, 160, 70, 0.6);
+          font-weight: 500;
+          color: rgba(255,255,255,0.45);
           margin-bottom: 0.4rem;
+          letter-spacing: 0.01em;
         }
 
-        .form-input {
+        .field-input {
           width: 100%;
-          padding: 0.7rem 0.9rem;
-          background: #0d0b08;
-          border: 1px solid rgba(200, 150, 60, 0.14);
-          border-bottom: 2px solid rgba(200, 150, 60, 0.3);
-          color: #ddc98a;
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 1rem;
+          padding: 0.675rem 0.9rem;
+          background: #161616;
+          border: 1px solid #272727;
+          color: #fff;
+          font-family: Inter, -apple-system, sans-serif;
+          font-size: 0.875rem;
           outline: none;
-          transition: border-color 0.2s, background 0.2s;
-          box-sizing: border-box;
+          transition: border-color 0.15s;
           -webkit-appearance: none;
+          border-radius: 0;
+          margin-bottom: 1rem;
         }
 
-        .form-input::placeholder { color: rgba(200, 150, 60, 0.22); }
+        .field-input::placeholder { color: rgba(255,255,255,0.16); }
+        .field-input:focus { border-color: #444; }
+        .field-input.with-icon { padding-right: 2.75rem; }
 
-        .form-input:focus {
-          border-bottom-color: #d4a84b;
-          background: #0f0d09;
-        }
+        .input-wrap { position: relative; margin-bottom: 1rem; }
+        .input-wrap .field-input { margin-bottom: 0; }
 
-        .input-wrapper { position: relative; }
-
-        .input-icon-btn {
+        .toggle-btn {
           position: absolute;
-          right: 0.75rem; top: 50%;
+          right: 0.75rem;
+          top: 50%;
           transform: translateY(-50%);
-          background: none; border: none; cursor: pointer;
-          color: rgba(200, 150, 60, 0.35);
-          display: flex; align-items: center;
-          transition: color 0.2s;
-          padding: 0.25rem;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: rgba(255,255,255,0.22);
+          display: flex;
+          align-items: center;
+          transition: color 0.15s;
+          padding: 0.2rem;
         }
 
-        .input-icon-btn:hover { color: rgba(200, 150, 60, 0.75); }
-        .form-input.with-icon { padding-right: 2.75rem; }
+        .toggle-btn:hover { color: rgba(255,255,255,0.55); }
 
         .btn-primary {
           width: 100%;
-          padding: 0.85rem 1.5rem;
-          background: #c9960a;
-          color: #0a0806;
+          padding: 0.72rem;
+          background: #fff;
+          color: #0a0a0a;
           border: none;
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 0.95rem;
+          font-family: Inter, -apple-system, sans-serif;
+          font-size: 0.82rem;
           font-weight: 600;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
+          letter-spacing: 0.01em;
           cursor: pointer;
-          transition: background 0.2s;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 0.5rem;
-          margin-top: 0.75rem;
+          margin-top: 0.25rem;
+          transition: opacity 0.15s;
         }
 
-        .btn-primary:hover:not(:disabled) { background: #dba80e; }
-        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+        .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
-        .btn-spinner {
-          width: 1rem; height: 1rem;
-          border: 1.5px solid rgba(10, 8, 6, 0.3);
-          border-top-color: #0a0806;
+        .spinner {
+          width: 0.875rem;
+          height: 0.875rem;
+          border: 1.5px solid rgba(10,10,10,0.25);
+          border-top-color: #0a0a0a;
           border-radius: 50%;
-          animation: spin 0.7s linear infinite;
+          animation: spin 0.65s linear infinite;
         }
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .login-divider {
-          display: flex; align-items: center;
-          gap: 1rem; margin: 1.4rem 0;
+        .auth-divider {
+          display: flex;
+          align-items: center;
+          gap: 0.875rem;
+          margin: 1.25rem 0;
         }
 
-        .divider-line { flex: 1; height: 1px; background: rgba(200, 150, 60, 0.1); }
+        .div-line { flex: 1; height: 1px; background: #1f1f1f; }
 
-        .divider-text {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 0.75rem;
-          font-style: italic;
-          color: rgba(200, 150, 60, 0.38);
-          white-space: nowrap;
+        .div-text {
+          font-size: 0.7rem;
+          color: rgba(255,255,255,0.22);
+          font-weight: 400;
         }
 
-        .btn-secondary {
+        .btn-ghost {
           width: 100%;
-          padding: 0.72rem 1.5rem;
+          padding: 0.68rem;
           background: transparent;
-          color: #c8a85a;
-          border: 1px solid rgba(200, 150, 60, 0.22);
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 0.9rem;
+          color: rgba(255,255,255,0.6);
+          border: 1px solid #272727;
+          font-family: Inter, -apple-system, sans-serif;
+          font-size: 0.82rem;
           font-weight: 500;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
           cursor: pointer;
-          transition: background 0.2s, border-color 0.2s;
+          transition: border-color 0.15s, color 0.15s;
           text-align: center;
           display: block;
           text-decoration: none;
         }
 
-        .btn-secondary:hover {
-          background: rgba(200, 150, 60, 0.06);
-          border-color: rgba(200, 150, 60, 0.4);
-        }
+        .btn-ghost:hover { border-color: #444; color: #fff; }
 
         .back-link {
           display: block;
           text-align: center;
-          margin-top: 1.25rem;
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 0.82rem;
-          font-style: italic;
-          color: rgba(200, 150, 60, 0.38);
+          margin-top: 1.1rem;
+          font-size: 0.75rem;
+          color: rgba(255,255,255,0.25);
           text-decoration: none;
-          transition: color 0.2s;
+          transition: color 0.15s;
         }
 
-        .back-link:hover { color: rgba(200, 150, 60, 0.7); }
+        .back-link:hover { color: rgba(255,255,255,0.6); }
 
-        .error-box {
-          background: rgba(180, 60, 40, 0.1);
-          border: 1px solid rgba(180, 60, 40, 0.2);
-          border-left: 2px solid rgba(200, 80, 50, 0.7);
-          padding: 0.8rem 1rem;
+        .error-banner {
+          background: rgba(220, 60, 50, 0.08);
+          border: 1px solid rgba(220, 60, 50, 0.18);
+          border-left: 2px solid rgba(220, 80, 60, 0.7);
+          padding: 0.75rem 0.875rem;
           display: flex;
           align-items: flex-start;
           gap: 0.6rem;
-          margin-bottom: 1.1rem;
+          margin-bottom: 1rem;
         }
 
         .error-title {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 0.72rem;
-          letter-spacing: 0.08em;
+          font-size: 0.7rem;
+          font-weight: 500;
+          letter-spacing: 0.06em;
           text-transform: uppercase;
-          color: rgba(220, 100, 80, 0.9);
-          margin-bottom: 0.15rem;
+          color: rgba(240, 100, 80, 0.9);
+          margin-bottom: 0.12rem;
         }
 
         .error-msg {
-          font-family: 'Crimson Pro', Georgia, serif;
-          font-size: 0.875rem;
-          font-style: italic;
-          color: rgba(220, 130, 110, 0.85);
+          font-size: 0.8rem;
+          color: rgba(240, 130, 110, 0.85);
+          line-height: 1.4;
         }
 
         @media (max-width: 640px) {
-          .login-panel-left { display: none; }
-          .login-panel-right { padding: 2.5rem 1.75rem; }
+          .auth-left { display: none; }
+          .auth-right { padding: 2.5rem 1.75rem; }
         }
       `}</style>
 
-      <div className="login-root">
-        <div className="login-split">
-          <div className="login-panel-left">
-            <div className="panel-glow" />
-            <div className="panel-lines" />
-            <div className="panel-bigquote">"</div>
-            <div className="panel-content">
-              <div className="panel-rule" />
-              <p className="panel-quote">
-                A reader lives a thousand lives before he dies. The man who never reads lives only one.
-              </p>
-              <span className="panel-attr">— George R.R. Martin</span>
+      <div className="auth-root">
+        <div className="auth-card">
+          {/* Left panel */}
+          <div className="auth-left">
+            <div className="left-dots" />
+            <div className="left-fade" />
+            <div className="left-top">
+              <p className="left-eyebrow">Why SML</p>
+              {features.map((f, i) => (
+                <div key={i} className={`feature-item${f.active ? " active" : ""}`}>
+                  <div className="feat-icon">{f.icon}</div>
+                  <div>
+                    <p className="feat-title">{f.title}</p>
+                    <p className="feat-sub">{f.sub}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="left-bottom">
+              <p className="left-wordmark">Scriptum Mens Lumen</p>
+              <p className="left-tagline">The light of the written mind</p>
             </div>
           </div>
 
-          <div className="login-panel-right">
-            <div className="login-wordmark">SML</div>
-            <p className="login-tagline">where every page finds its reader</p>
-            <h2 className="login-form-title">Welcome back</h2>
+          {/* Right form */}
+          <div className="auth-right">
+            <h1 className="form-heading">Sign in</h1>
+            <p className="form-subheading">Welcome back. Continue your reading journey.</p>
 
             <form onSubmit={handleLogin}>
               {error && (
-                <div className="error-box">
-                  <AlertCircle size={15} color="rgba(220,100,80,0.9)" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div className="error-banner">
+                  <AlertCircle size={14} color="rgba(240,100,80,0.9)" style={{ flexShrink: 0, marginTop: 1 }} />
                   <div>
-                    <p className="error-title">Authentication Failed</p>
+                    <p className="error-title">Sign in failed</p>
                     <p className="error-msg">{error}</p>
                   </div>
                 </div>
               )}
 
-              <div className="form-group">
-                <label htmlFor="email" className="form-label">Email Address</label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="form-input"
-                  placeholder="you@example.com"
-                />
-              </div>
+              <label className="field-label">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="field-input"
+                placeholder="you@example.com"
+              />
 
-              <div className="form-group">
-                <label htmlFor="password" className="form-label">Password</label>
-                <div className="input-wrapper">
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="form-input with-icon"
-                    placeholder="••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="input-icon-btn"
-                  >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
+              <label className="field-label">Password</label>
+              <div className="input-wrap">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="field-input with-icon"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="toggle-btn"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
               </div>
 
               <button type="submit" disabled={loading} className="btn-primary">
                 {loading ? (
-                  <><div className="btn-spinner" /> Signing in…</>
+                  <><div className="spinner" /> Signing in…</>
                 ) : (
                   <><LogIn size={14} /> Sign In</>
                 )}
               </button>
             </form>
 
-            <div className="login-divider">
-              <div className="divider-line" />
-              <span className="divider-text">new to the shelves?</span>
-              <div className="divider-line" />
+            <div className="auth-divider">
+              <div className="div-line" />
+              <span className="div-text">or</span>
+              <div className="div-line" />
             </div>
 
-            <Link href="/auth/signup" className="btn-secondary">
-              Create an Account
+            <Link href="/auth/signup" className="btn-ghost">
+              Create an account
             </Link>
 
-            <Link href="/" className="back-link">← Back to Home</Link>
+            <Link href="/" className="back-link">← Back to home</Link>
           </div>
         </div>
       </div>

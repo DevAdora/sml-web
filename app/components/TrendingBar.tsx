@@ -25,35 +25,47 @@ interface RightSidebarProps {
   suggestedWriters: SuggestedWriter[];
 }
 
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 mb-3">
+      <span className="text-neutral-700">{icon}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-600">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+
 export function RightSidebar({
   trendingBooks,
   loadingTrending,
   internalTrending,
   suggestedWriters,
 }: RightSidebarProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifRead, setNotifRead] = useState(false);
+
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  const [loadingSuggested, setLoadingSuggested] = useState(false);
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
+
 
   useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "unset";
     return () => {
       document.body.style.overflow = "unset";
     };
   }, [mobileMenuOpen]);
 
-  const handleBookClick = (link?: string) => {
-    if (link) {
-      window.open(link, "_blank");
-    }
-  };
-
-  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
-  const [loadingSuggested, setLoadingSuggested] = useState(false);
-  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -75,21 +87,19 @@ export function RightSidebar({
     load();
   }, []);
 
+
   const toggleFollow = async (userId: string, currentlyFollowing: boolean) => {
     setFollowLoadingId(userId);
-
     setSuggestedUsers((prev) =>
       prev.map((u) =>
         u.id === userId ? { ...u, is_following: !currentlyFollowing } : u
       )
     );
-
     try {
       const res = await fetch(`/api/user/${userId}/follow`, {
         method: currentlyFollowing ? "DELETE" : "POST",
         credentials: "include",
       });
-
       if (!res.ok) {
         setSuggestedUsers((prev) =>
           prev.map((u) =>
@@ -110,223 +120,231 @@ export function RightSidebar({
     }
   };
 
-  const SidebarContent = () => (
-    <>
-      <div className="hidden lg:flex items-center justify-end space-x-3 mb-8">
-        <button className="relative p-2 text-neutral-400 hover:bg-neutral-800 rounded-lg transition">
-          <Bell size={20} strokeWidth={1.5} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-neutral-600 rounded-full"></span>
-        </button>
-      </div>
+  const generateInitials = (name: string) =>
+    (name || "??")
+      .trim()
+      .split(" ")
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("")
+      .toUpperCase();
 
-      <div className="mb-8">
-        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-          <BookOpen
-            className="mr-2 text-neutral-500"
-            size={16}
-            strokeWidth={1.5}
-          />
-          Trending Books
-        </h3>
+
+  const PanelContent = () => (
+    <div className="">
+
+      <section className="px-5 py-4">
+        <SectionHeader
+          icon={<BookOpen size={16} strokeWidth={1.6} />}
+          label="Trending Books"
+        />
+
         {loadingTrending ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader className="animate-spin text-neutral-600" size={24} />
+          <div className="flex justify-center py-6">
+            <Loader className="animate-spin text-neutral-700" size={18} />
           </div>
+        ) : trendingBooks.length === 0 ? (
+          <p className="text-[16px] text-neutral-700 italic">No books found.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="divide-y divide-[#141414]">
             {trendingBooks.map((book, idx) => (
-              <div
+              <button
                 key={idx}
-                onClick={() => handleBookClick(book.link)}
-                className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer group"
+                onClick={() => book.link && window.open(book.link, "_blank")}
+                className="w-full flex items-start gap-3 py-2.5 text-left group hover:opacity-75 transition-opacity"
               >
-                <div className="flex items-start justify-between">
-                  <p className="font-medium text-neutral-300 text-sm truncate flex-1">
+                {/* Rank number */}
+                <span className="text-[10px] font-bold text-neutral-700 w-3.5 flex-shrink-0 mt-0.5 tabular-nums">
+                  {idx + 1}
+                </span>
+
+                {/* Book info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium text-neutral-400 group-hover:text-neutral-200 transition-colors leading-snug truncate">
                     {book.title}
                   </p>
-                  {book.link && (
-                    <ExternalLink
-                      size={14}
-                      className="text-neutral-600 group-hover:text-neutral-400 ml-2 flex-shrink-0"
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-neutral-500 mt-1">
-                  by {book.author}
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-neutral-600">
-                    {book.category}
-                  </span>
-                  <span className="text-xs text-neutral-600">
+                  <p className="text-[10px] text-neutral-600 mt-0.5 truncate">
+                    {book.author}
+                  </p>
+                  <p className="text-[10px] text-neutral-700 mt-1">
                     {book.discussions} discussions
-                  </span>
+                  </p>
                 </div>
+
+                {book.link && (
+                  <ExternalLink
+                    size={10}
+                    className="text-neutral-700 group-hover:text-neutral-500 flex-shrink-0 mt-1 transition-colors"
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="px-5 py-4">
+        <SectionHeader
+          icon={<Hash size={16} strokeWidth={1.6} />}
+          label="Trending in SML"
+        />
+
+        <div className="divide-y divide-[#141414]">
+          {internalTrending.map((topic, idx) => (
+            <button
+              key={idx}
+              className="w-full flex items-center justify-between py-2.5 text-left group hover:opacity-75 transition-opacity"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[16px] font-medium text-neutral-400 group-hover:text-neutral-200 transition-colors truncate">
+                  #{topic.tag}
+                </p>
+                <p className="text-[10px] text-neutral-700 mt-0.5">
+                  {topic.posts} posts
+                </p>
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-500 flex-shrink-0 ml-3 tabular-nums">
+                {topic.growth}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="px-5 py-4">
+        <SectionHeader
+          icon={<Users size={16} strokeWidth={1.6} />}
+          label="Suggested Writers"
+        />
+
+        {loadingSuggested ? (
+          <div className="flex justify-center py-6">
+            <Loader className="animate-spin text-neutral-700" size={18} />
+          </div>
+        ) : suggestedUsers.length === 0 ? (
+          <p className="text-[11px] text-neutral-700 italic">
+            No suggestions yet.
+          </p>
+        ) : (
+          <div className="divide-y divide-[#141414]">
+            {suggestedUsers.map((u) => (
+              <div key={u.id} className="flex items-center gap-3 py-3">
+                <div className="w-8 h-8 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-neutral-500 text-[10px] font-semibold flex-shrink-0">
+                  {generateInitials(u.full_name || "")}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-[16px] font-medium text-neutral-400 truncate leading-tight">
+                    {u.full_name || "Anonymous"}
+                  </p>
+                  <p className="text-[12px] text-neutral-600 truncate mt-0.5">
+                    @{(u.full_name || "user").toLowerCase().replace(/\s+/g, "")}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => toggleFollow(u.id, u.is_following)}
+                  disabled={followLoadingId === u.id}
+                  className={`
+                    flex-shrink-0 text-[12px] font-semibold px-3 py-1.5
+                    border transition-all disabled:opacity-50 tracking-wide
+                    ${
+                      u.is_following
+                        ? "border-[#1f1f1f] text-neutral-600 hover:border-red-900/40 hover:text-red-400"
+                        : "border-[#2a2a2a] text-neutral-400 hover:border-[#3a3a3a] hover:text-white"
+                    }
+                  `}
+                >
+                  {followLoadingId === u.id
+                    ? "…"
+                    : u.is_following
+                    ? "Following"
+                    : "Follow"}
+                </button>
               </div>
             ))}
           </div>
         )}
-      </div>
-
-      <div className="mb-8">
-        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-          <Hash className="mr-2 text-neutral-500" size={16} strokeWidth={1.5} />
-          Trending in SML
-        </h3>
-        <div className="space-y-2">
-          {internalTrending.map((topic, idx) => (
-            <div
-              key={idx}
-              className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-neutral-300 text-sm">
-                  #{topic.tag}
-                </p>
-                <span className="text-xs text-neutral-500">{topic.growth}</span>
-              </div>
-              <p className="text-xs text-neutral-600 mt-1">
-                {topic.posts} posts
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Suggested Writers */}
-      <div className="mb-8 lg:mb-0">
-        <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-          <Users
-            className="mr-2 text-neutral-500"
-            size={16}
-            strokeWidth={1.5}
-          />
-          Suggested Writers
-        </h3>
-        <div className="space-y-3">
-          {loadingSuggested ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader className="animate-spin text-neutral-600" size={20} />
-            </div>
-          ) : suggestedUsers.length === 0 ? (
-            <p className="text-xs text-neutral-600">No suggestions yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {suggestedUsers.map((u) => (
-                <div
-                  key={u.id}
-                  className="p-4 bg-neutral-800/50 border border-neutral-800 rounded-lg"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium">
-                        {(u.full_name || "??")
-                          .trim()
-                          .split(" ")
-                          .slice(0, 2)
-                          .map((p) => p[0])
-                          .join("")
-                          .toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium text-neutral-300 text-sm">
-                          {u.full_name || "Anonymous"}
-                        </p>
-                        <p className="text-xs text-neutral-600">
-                          @
-                          {(u.full_name || "user")
-                            .toLowerCase()
-                            .replace(/\s+/g, "")}
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => toggleFollow(u.id, u.is_following)}
-                      disabled={followLoadingId === u.id}
-                      className={`px-3 py-1 border rounded text-xs font-medium transition disabled:opacity-50 ${
-                        u.is_following
-                          ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-700 text-neutral-300"
-                          : "bg-neutral-800 hover:bg-neutral-700 border-neutral-700 text-neutral-300"
-                      }`}
-                    >
-                      {followLoadingId === u.id
-                        ? "..."
-                        : u.is_following
-                        ? "Following"
-                        : "Follow"}
-                    </button>
-                  </div>
-
-                  <p className="text-xs text-neutral-500">Reader on SML</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </>
+      </section>
+    </div>
   );
+
 
   return (
     <>
-      <aside className="hidden lg:block fixed right-0 top-0 h-screen w-96 p-6 overflow-y-auto [scrollbar-width:none] z-40">
-        <SidebarContent />
+      <aside className="hidden lg:flex flex-col fixed right-0 top-0 h-screen w-96 bg-[#0a0a0a] z-40 overflow-hidden">
+
+        <div className="h-[48px] border-b border-[#1a1a1a] flex items-center justify-end px-4 flex-shrink-0">
+          <button
+            onClick={() => setNotifRead(true)}
+            title="Notifications"
+            className="relative w-8 h-8 flex items-center justify-center text-neutral-600 hover:text-neutral-300 hover:bg-[#161616] transition-colors"
+          >
+            <Bell size={16} strokeWidth={1.5} />
+            {!notifRead && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-neutral-500 rounded-full border border-[#0a0a0a]" />
+            )}
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <PanelContent />
+        </div>
       </aside>
 
       <button
         onClick={() => setMobileMenuOpen(true)}
-        className="lg:hidden fixed bottom-4 right-4 z-50 flex items-center space-x-2 px-4 py-2 bg-neutral-800/95 backdrop-blur-md hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded-full shadow-lg transition-all active:scale-95"
-        aria-label="Open trending menu"
+        className="lg:hidden fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-2.5 bg-[#111] border border-[#272727] text-neutral-300 hover:border-[#3a3a3a] hover:text-white shadow-xl transition-all active:scale-95"
+        aria-label="Open trending panel"
       >
-        <TrendingUp size={20} strokeWidth={1.5} />
-        <span className="text-sm font-medium">Trending</span>
+        <TrendingUp size={14} strokeWidth={1.5} />
+        <span className="text-xs font-semibold">Trending</span>
       </button>
 
       {mobileMenuOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] transition-opacity"
+          className="lg:hidden fixed inset-0 bg-black/70 z-[60]"
           onClick={() => setMobileMenuOpen(false)}
-          style={{
-            animation: "fadeIn 0.3s ease-out",
-          }}
+          style={{ animation: "fadeIn 0.2s ease-out" }}
         />
       )}
 
       <div
-        className={`lg:hidden fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 rounded-t-3xl z-[70] transition-transform duration-300 ease-out ${
-          mobileMenuOpen ? "translate-y-0" : "translate-y-full"
-        }`}
-        style={{
-          height: "65vh",
-          maxHeight: "650px",
-        }}
+        className={`
+          lg:hidden fixed bottom-0 left-0 right-0
+          bg-[#0f0f0f] border-t border-[#1a1a1a] rounded-t-2xl
+          z-[70] transition-transform duration-300 ease-out
+          ${mobileMenuOpen ? "translate-y-0" : "translate-y-full"}
+        `}
+        style={{ height: "70vh", maxHeight: 680 }}
       >
-        <div className="flex justify-center pt-3 pb-2">
-          <div className="w-12 h-1.5 bg-neutral-700 rounded-full" />
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-[#2a2a2a] rounded-full" />
         </div>
 
         <button
           onClick={() => setMobileMenuOpen(false)}
-          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-neutral-300 hover:bg-neutral-800 rounded-full transition"
-          aria-label="Close menu"
+          className="absolute top-3.5 right-4 w-8 h-8 flex items-center justify-center text-neutral-500 hover:text-neutral-300 hover:bg-[#1a1a1a] transition-colors"
+          aria-label="Close panel"
         >
-          <X size={20} strokeWidth={1.5} />
+          <X size={15} strokeWidth={2} />
         </button>
 
-        <div className="h-full overflow-y-auto px-6 pb-6">
-          <SidebarContent />
+        <div className="px-5 pb-3 border-b border-[#1a1a1a]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-600">
+            Discover
+          </p>
+        </div>
+
+        <div className="h-full overflow-y-auto pb-10">
+          <PanelContent />
         </div>
       </div>
 
       <style jsx global>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       `}</style>
     </>
