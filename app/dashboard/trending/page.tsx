@@ -1,513 +1,659 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   TrendingUp,
-  Flame,
   Clock,
-  Star,
+  Heart,
   MessageCircle,
   Bookmark,
-  Eye,
-  Users,
   Hash,
+  Users,
+  Loader,
+  BookOpen,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import LeftSidebar from "@/app/components/Sidebar";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface TrendingPost {
+  id: string;
+  rank: number;
+  title: string;
+  excerpt: string;
+  author_name: string;
+  genre: string;
+  likes_count: number;
+  comments_count: number;
+  read_time: number;
+  created_at: string;
+  cover_image_url?: string | null;
+}
+
+interface TrendingTopic {
+  tag: string;
+  posts: string;
+  growth: string;
+}
+
+interface TrendingAuthor {
+  id: string;
+  full_name: string;
+  post_count: number;
+  follower_count: number;
+  is_following: boolean;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const getRelativeTime = (dateString: string): string => {
+  const diff = Math.floor(
+    (Date.now() - new Date(dateString).getTime()) / 1000
+  );
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(dateString).toLocaleDateString();
+};
+
+const getInitials = (name: string) =>
+  (name || "??")
+    .trim()
+    .split(" ")
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+
+const formatCount = (n: number): string => {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+};
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`bg-[#1a1a1a] animate-pulse ${className ?? ""}`} />;
+}
+
+function PostSkeleton() {
+  return (
+    <div className="bg-[#111] border border-[#1f1f1f] p-5 flex gap-4">
+      <Skeleton className="w-6 h-6 flex-shrink-0 mt-1" />
+      <div className="flex-1 space-y-3">
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-7 h-7 rounded-full flex-shrink-0" />
+          <Skeleton className="h-2.5 w-32" />
+          <Skeleton className="h-2 w-16 ml-auto" />
+        </div>
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-2.5 w-full" />
+        <Skeleton className="h-2.5 w-4/5" />
+        <div className="flex gap-4 pt-1">
+          <Skeleton className="h-2 w-8" />
+          <Skeleton className="h-2 w-8" />
+          <Skeleton className="h-2 w-10" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Time filter tabs ─────────────────────────────────────────────────────────
+
+const TIME_FILTERS = [
+  { value: "today", label: "Today" },
+  { value: "week", label: "This Week" },
+  { value: "month", label: "This Month" },
+  { value: "all", label: "All Time" },
+];
+
+// ─── Static trending topics (replace with API if available) ───────────────────
+
+const TRENDING_TOPICS: TrendingTopic[] = [
+  { tag: "literary-fiction", posts: "2.3k", growth: "+12%" },
+  { tag: "book-recommendations", posts: "5.1k", growth: "+8%" },
+  { tag: "reading-challenge-2024", posts: "1.8k", growth: "+25%" },
+  { tag: "indie-authors", posts: "892", growth: "+15%" },
+  { tag: "poetry-corner", posts: "1.2k", growth: "+5%" },
+  { tag: "book-club-picks", posts: "923", growth: "+18%" },
+];
+
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <span className="text-neutral-700">{icon}</span>
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500">
+        {label}
+      </h2>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function TrendingPage() {
-  const [timeFilter, setTimeFilter] = useState<string>("today");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const router = useRouter();
 
-  const timeFilters = [
-    { value: "today", label: "Today" },
-    { value: "week", label: "This Week" },
-    { value: "month", label: "This Month" },
-    { value: "year", label: "This Year" },
-  ];
+  const [timeFilter, setTimeFilter] = useState("today");
+  const [posts, setPosts] = useState<TrendingPost[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
 
-  const categories = ["All", "Reviews", "Lists", "Discussions", "Authors"];
+  const [trendingAuthors, setTrendingAuthors] = useState<TrendingAuthor[]>([]);
+  const [loadingAuthors, setLoadingAuthors] = useState(true);
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
 
-  const trendingPosts = [
-    {
-      id: 1,
-      rank: 1,
-      title: "Why 'The Midnight Library' Is More Relevant Than Ever",
-      author: "Sarah Mitchell",
-      avatar: "SM",
-      genre: "Fiction",
-      excerpt:
-        "In times of uncertainty, this book reminds us that every choice matters and every life has infinite possibilities...",
-      likes: 2847,
-      comments: 456,
-      views: 12340,
-      timestamp: "4 hours ago",
-      readTime: "8 min",
-      trending: "hot",
-      growth: "+342%",
-    },
-    {
-      id: 2,
-      rank: 2,
-      title: "Top 15 Books That Predicted AI's Rise",
-      author: "Tech Reader",
-      avatar: "TR",
-      genre: "Lists",
-      excerpt:
-        "From Asimov to Gibson, these authors saw our AI future decades before ChatGPT...",
-      likes: 2134,
-      comments: 289,
-      views: 9823,
-      timestamp: "6 hours ago",
-      readTime: "12 min",
-      trending: "hot",
-      growth: "+267%",
-    },
-    {
-      id: 3,
-      rank: 3,
-      title: "Unpopular Opinion: Classic Literature Is Overrated",
-      author: "Critical Carl",
-      avatar: "CC",
-      genre: "Opinion",
-      excerpt:
-        "Let's talk about why forcing students to read Dickens might be doing more harm than good...",
-      likes: 1876,
-      comments: 523,
-      views: 8934,
-      timestamp: "8 hours ago",
-      readTime: "7 min",
-      trending: "controversial",
-      growth: "+198%",
-    },
-    {
-      id: 4,
-      rank: 4,
-      title: "My Journey Reading 100 Books This Year",
-      author: "BookWorm Betty",
-      avatar: "BB",
-      genre: "Personal",
-      excerpt:
-        "Here's what I learned from reading 100 books in 365 days, and how it changed my perspective on everything...",
-      likes: 1654,
-      comments: 234,
-      views: 7621,
-      timestamp: "10 hours ago",
-      readTime: "10 min",
-      trending: "rising",
-      growth: "+156%",
-    },
-    {
-      id: 5,
-      rank: 5,
-      title: "The Best Mystery Novels You've Never Heard Of",
-      author: "Detective Dana",
-      avatar: "DD",
-      genre: "Lists",
-      excerpt:
-        "Forget Gone Girl and The Girl on the Train. These hidden gems will keep you up all night...",
-      likes: 1523,
-      comments: 187,
-      views: 6892,
-      timestamp: "12 hours ago",
-      readTime: "9 min",
-      trending: "rising",
-      growth: "+134%",
-    },
-    {
-      id: 6,
-      rank: 6,
-      title: "Why Brandon Sanderson Is the Future of Fantasy",
-      author: "Fantasy Fan",
-      avatar: "FF",
-      genre: "Analysis",
-      excerpt:
-        "His world-building, magic systems, and consistent output make him the Tolkien of our generation...",
-      likes: 1421,
-      comments: 312,
-      views: 6234,
-      timestamp: "14 hours ago",
-      readTime: "11 min",
-      trending: "steady",
-      growth: "+112%",
-    },
-    {
-      id: 7,
-      rank: 7,
-      title: "Books That Made Me Cry (And I'm Not Ashamed)",
-      author: "Emotional Emma",
-      avatar: "EE",
-      genre: "Personal",
-      excerpt:
-        "These stories broke my heart in the best possible way. Keep tissues nearby...",
-      likes: 1312,
-      comments: 245,
-      views: 5876,
-      timestamp: "16 hours ago",
-      readTime: "6 min",
-      trending: "steady",
-      growth: "+98%",
-    },
-    {
-      id: 8,
-      rank: 8,
-      title: "The Problem With BookTok Recommendations",
-      author: "Critical Reader",
-      avatar: "CR",
-      genre: "Opinion",
-      excerpt:
-        "Why algorithmic reading culture might be homogenizing our literary tastes...",
-      likes: 1267,
-      comments: 456,
-      views: 5621,
-      timestamp: "18 hours ago",
-      readTime: "8 min",
-      trending: "controversial",
-      growth: "+87%",
-    },
-  ];
+  const [postInteractions, setPostInteractions] = useState<
+    Record<string, { liked: boolean; bookmarked: boolean; likeCount: number }>
+  >({});
 
-  const trendingTopics = [
-    { tag: "reading-challenge-2024", posts: "1.8k", growth: "+342%" },
-    { tag: "book-recommendations", posts: "5.1k", growth: "+267%" },
-    { tag: "unpopular-opinions", posts: "923", growth: "+198%" },
-    { tag: "fantasy-books", posts: "2.4k", growth: "+156%" },
-    { tag: "book-reviews", posts: "3.2k", growth: "+134%" },
-    { tag: "emotional-reads", posts: "1.5k", growth: "+112%" },
-  ];
+  // ── Fetch trending posts ───────────────────────────────────────────────────
 
-  const trendingAuthors = [
-    {
-      name: "Sarah Mitchell",
-      followers: "12.3k",
-      newFollowers: "+342",
-      avatar: "SM",
-    },
-    {
-      name: "Critical Carl",
-      followers: "8.9k",
-      newFollowers: "+267",
-      avatar: "CC",
-    },
-    {
-      name: "Detective Dana",
-      followers: "15.2k",
-      newFollowers: "+198",
-      avatar: "DD",
-    },
-    {
-      name: "BookWorm Betty",
-      followers: "6.7k",
-      newFollowers: "+156",
-      avatar: "BB",
-    },
-  ];
+  const fetchPosts = useCallback(async () => {
+    setLoadingPosts(true);
+    try {
+      // Sort by likes to get most-engaged posts
+      // Pass timeFilter so the API can filter by created_at window if supported
+      const params = new URLSearchParams({
+        limit: "20",
+        sort: "top",
+        period: timeFilter,
+      });
 
-  const getTrendingBadge = (type: string) => {
-    switch (type) {
-      case "hot":
-        return (
-          <span className="flex items-center space-x-1 px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded text-xs font-medium">
-            <Flame size={12} strokeWidth={2} />
-            <span>Hot</span>
-          </span>
+      const res = await fetch(`/api/posts?${params}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch posts");
+      const data = await res.json();
+
+      const fetched = (data.posts || [])
+        .map((p: any, idx: number) => ({
+          id: p.id,
+          rank: idx + 1,
+          title: p.title,
+          excerpt: p.excerpt || "",
+          author_name: p.author_name || "Anonymous",
+          genre: p.genre || "",
+          likes_count: p.likes_count || 0,
+          comments_count: p.comments_count || 0,
+          read_time: p.read_time || 1,
+          created_at: p.created_at || p.published_at,
+          cover_image_url: p.cover_image_url || null,
+        }))
+        // Client-side sort by engagement score (likes × 2 + comments)
+        // as a fallback if API doesn't support sort param
+        .sort(
+          (a: TrendingPost, b: TrendingPost) =>
+            b.likes_count * 2 +
+            b.comments_count -
+            (a.likes_count * 2 + a.comments_count)
+        )
+        .map((p: TrendingPost, idx: number) => ({ ...p, rank: idx + 1 }));
+
+      setPosts(fetched);
+
+      // Fetch interaction state
+      const interactions: typeof postInteractions = {};
+      await Promise.all(
+        fetched.slice(0, 10).map(async (p: TrendingPost) => {
+          try {
+            const r = await fetch(`/api/posts/${p.id}`, {
+              credentials: "include",
+            });
+            if (r.ok) {
+              const d = await r.json();
+              interactions[p.id] = {
+                liked: d.user_liked || false,
+                bookmarked: d.user_bookmarked || false,
+                likeCount: d.likes_count ?? p.likes_count,
+              };
+            }
+          } catch {
+            interactions[p.id] = {
+              liked: false,
+              bookmarked: false,
+              likeCount: p.likes_count,
+            };
+          }
+        })
+      );
+      setPostInteractions(interactions);
+    } catch (e) {
+      console.error("Error fetching trending posts:", e);
+    } finally {
+      setLoadingPosts(false);
+    }
+  }, [timeFilter]);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+  // ── Fetch trending authors ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    const fetch_ = async () => {
+      setLoadingAuthors(true);
+      try {
+        const res = await fetch("/api/user/suggested?limit=5", {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setTrendingAuthors(
+          (data.users || []).map((u: any) => ({
+            id: u.id,
+            full_name: u.full_name || "Anonymous",
+            post_count: u.post_count || 0,
+            follower_count: u.follower_count || 0,
+            is_following: u.is_following || false,
+          }))
         );
-      case "rising":
-        return (
-          <span className="flex items-center space-x-1 px-2 py-1 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded text-xs font-medium">
-            <TrendingUp size={12} strokeWidth={2} />
-            <span>Rising</span>
-          </span>
-        );
-      case "controversial":
-        return (
-          <span className="flex items-center space-x-1 px-2 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded text-xs font-medium">
-            <MessageCircle size={12} strokeWidth={2} />
-            <span>Controversial</span>
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium">
-            Steady
-          </span>
-        );
+      } catch {
+        setTrendingAuthors([]);
+      } finally {
+        setLoadingAuthors(false);
+      }
+    };
+    fetch_();
+  }, []);
+
+  // ── Interactions ───────────────────────────────────────────────────────────
+
+  const handleLike = async (postId: string) => {
+    const current = postInteractions[postId];
+    const newLiked = !current?.liked;
+    setPostInteractions((prev) => ({
+      ...prev,
+      [postId]: {
+        ...prev[postId],
+        liked: newLiked,
+        likeCount: newLiked
+          ? (prev[postId]?.likeCount || 0) + 1
+          : Math.max((prev[postId]?.likeCount || 0) - 1, 0),
+      },
+    }));
+    try {
+      await fetch(`/api/posts/${postId}/like`, {
+        method: newLiked ? "POST" : "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      setPostInteractions((prev) => ({ ...prev, [postId]: current }));
     }
   };
 
-  const handleSignOut = () => {
-    console.log("User signed out");
+  const handleBookmark = async (postId: string) => {
+    const current = postInteractions[postId];
+    const newBookmarked = !current?.bookmarked;
+    setPostInteractions((prev) => ({
+      ...prev,
+      [postId]: { ...prev[postId], bookmarked: newBookmarked },
+    }));
+    try {
+      await fetch(`/api/posts/${postId}/bookmark`, {
+        method: newBookmarked ? "POST" : "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      setPostInteractions((prev) => ({ ...prev, [postId]: current }));
+    }
   };
 
+  const toggleFollow = async (userId: string, currentlyFollowing: boolean) => {
+    setFollowLoadingId(userId);
+    setTrendingAuthors((prev) =>
+      prev.map((u) =>
+        u.id === userId ? { ...u, is_following: !currentlyFollowing } : u
+      )
+    );
+    try {
+      const res = await fetch(`/api/user/${userId}/follow`, {
+        method: currentlyFollowing ? "DELETE" : "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        setTrendingAuthors((prev) =>
+          prev.map((u) =>
+            u.id === userId ? { ...u, is_following: currentlyFollowing } : u
+          )
+        );
+      }
+    } catch {
+      setTrendingAuthors((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, is_following: currentlyFollowing } : u
+        )
+      );
+    } finally {
+      setFollowLoadingId(null);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/logout", { method: "POST", credentials: "include" });
+      window.location.href = "/";
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-200">
+    <div className="min-h-screen bg-[#0a0a0a] text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* Main Content */}
-      <main className="ml-72 min-h-screen">
-        {/* Header */}
-        <div className="top-0 z-10  backdrop-blur-sm ">
-          <div className="max-w-7xl mx-auto px-6 py-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-3xl font-serif text-neutral-200 flex items-center mb-2">
-                  <Flame
-                    className="mr-3 text-red-400"
-                    size={32}
-                    strokeWidth={1.5}
-                  />
-                  Trending Now
-                </h1>
-                <p className="text-sm text-neutral-500">
-                  The hottest discussions and reviews in the community
-                </p>
-              </div>
+      <main className="lg:ml-[240px] min-h-screen">
+        <div className="max-w-[1100px] mx-auto px-5 py-6">
+
+          {/* ── Page header + time filter ── */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <TrendingUp
+                size={14}
+                strokeWidth={1.5}
+                className="text-neutral-600"
+              />
+              <h1 className="text-sm font-semibold text-white tracking-tight">
+                Trending
+              </h1>
+              <span className="text-xs text-neutral-700 ml-1">
+                ranked by engagement
+              </span>
             </div>
 
-            {/* Filters */}
-            <div className="flex items-center justify-between">
-              {/* Time Filter */}
-              <div className="flex space-x-2">
-                {timeFilters.map((filter) => (
-                  <button
-                    key={filter.value}
-                    onClick={() => setTimeFilter(filter.value)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                      timeFilter === filter.value
-                        ? "bg-neutral-200 text-neutral-900"
-                        : "bg-neutral-800 text-neutral-400 border border-neutral-700 hover:bg-neutral-700"
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Category Filter */}
-              <div className="flex space-x-2">
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => setCategoryFilter(category.toLowerCase())}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-                      categoryFilter === category.toLowerCase()
-                        ? "bg-neutral-800 text-neutral-200 border border-neutral-700"
-                        : "text-neutral-500 hover:text-neutral-300"
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Content - Trending Posts */}
-            <div className="lg:col-span-2 space-y-4">
-              {trendingPosts.map((post) => (
-                <article
-                  key={post.id}
-                  className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 hover:border-neutral-700 transition cursor-pointer"
+            {/* Time filter pills */}
+            <div className="flex items-center gap-1 bg-[#111] border border-[#1f1f1f] p-1">
+              {TIME_FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => setTimeFilter(f.value)}
+                  className={`text-[11px] font-medium px-3 py-1.5 transition-all ${
+                    timeFilter === f.value
+                      ? "bg-white text-[#0a0a0a]"
+                      : "text-neutral-500 hover:text-neutral-300"
+                  }`}
                 >
-                  {/* Header */}
-                  <div className="flex items-start space-x-4 mb-4">
-                    {/* Rank Badge */}
-                    <div className="flex-shrink-0">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${
-                          post.rank === 1
-                            ? "bg-yellow-500/20 text-yellow-400 border-2 border-yellow-500/50"
-                            : post.rank === 2
-                            ? "bg-gray-400/20 text-gray-300 border-2 border-gray-400/50"
-                            : post.rank === 3
-                            ? "bg-orange-600/20 text-orange-400 border-2 border-orange-600/50"
-                            : "bg-neutral-800 text-neutral-500 border border-neutral-700"
-                        }`}
-                      >
-                        {post.rank}
-                      </div>
-                    </div>
-
-                    {/* Author Info */}
-                    <div className="flex items-center space-x-3 flex-1 min-w-0">
-                      <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
-                        {post.avatar}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-neutral-300 text-sm truncate">
-                          {post.author}
-                        </p>
-                        <div className="flex items-center space-x-2 text-xs text-neutral-600">
-                          <span>{post.timestamp}</span>
-                          <span>·</span>
-                          <span className="flex items-center">
-                            <Clock
-                              size={11}
-                              className="mr-1"
-                              strokeWidth={1.5}
-                            />
-                            {post.readTime}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {getTrendingBadge(post.trending)}
-                        <span className="px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded text-xs font-medium">
-                          {post.growth}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="ml-14">
-                    <div className="flex items-start justify-between mb-3">
-                      <h3 className="text-xl font-serif text-neutral-100 hover:text-neutral-300 transition flex-1 break-words">
-                        {post.title}
-                      </h3>
-                      <span className="ml-3 px-3 py-1 bg-neutral-800 text-neutral-400 border border-neutral-700 rounded text-xs font-medium whitespace-nowrap">
-                        {post.genre}
-                      </span>
-                    </div>
-                    <p className="text-neutral-400 text-sm mb-4 leading-relaxed break-words line-clamp-2">
-                      {post.excerpt}
-                    </p>
-
-                    {/* Engagement Stats */}
-                    <div className="flex items-center space-x-6 text-sm text-neutral-500">
-                      <span className="flex items-center space-x-2 hover:text-neutral-300 transition">
-                        <Star size={16} strokeWidth={1.5} />
-                        <span>{post.likes.toLocaleString()}</span>
-                      </span>
-                      <span className="flex items-center space-x-2 hover:text-neutral-300 transition">
-                        <MessageCircle size={16} strokeWidth={1.5} />
-                        <span>{post.comments}</span>
-                      </span>
-                      <span className="flex items-center space-x-2 hover:text-neutral-300 transition">
-                        <Eye size={16} strokeWidth={1.5} />
-                        <span>{post.views.toLocaleString()}</span>
-                      </span>
-                      <span className="flex items-center space-x-2 hover:text-neutral-300 transition">
-                        <Bookmark size={16} strokeWidth={1.5} />
-                        <span>Save</span>
-                      </span>
-                    </div>
-                  </div>
-                </article>
+                  {f.label}
+                </button>
               ))}
             </div>
+          </div>
 
-            {/* Right Sidebar */}
-            <div className="space-y-6">
-              {/* Trending Topics */}
-              <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-                  <Hash
-                    className="mr-2 text-neutral-500"
-                    size={16}
-                    strokeWidth={1.5}
-                  />
-                  Trending Topics
-                </h3>
+          {/* ── Main grid ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-6">
+
+            {/* ── Left: Ranked posts ── */}
+            <div>
+              {loadingPosts ? (
                 <div className="space-y-3">
-                  {trendingTopics.map((topic, idx) => (
+                  {[...Array(6)].map((_, i) => (
+                    <PostSkeleton key={i} />
+                  ))}
+                </div>
+              ) : posts.length === 0 ? (
+                <div className="bg-[#111] border border-[#1f1f1f] p-16 text-center">
+                  <BookOpen
+                    size={32}
+                    strokeWidth={1.2}
+                    className="mx-auto mb-3 text-neutral-700"
+                  />
+                  <p className="text-sm text-neutral-500">
+                    No trending posts yet
+                  </p>
+                  <p className="text-xs text-neutral-700 mt-1">
+                    Be the first to write something
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {posts.map((post) => {
+                    const interaction = postInteractions[post.id];
+                    const liked = interaction?.liked || false;
+                    const bookmarked = interaction?.bookmarked || false;
+                    const likeCount =
+                      interaction?.likeCount ?? post.likes_count;
+
+                    return (
+                      <Link
+                        key={post.id}
+                        href={`/dashboard/posts/${post.id}`}
+                      >
+                        <article className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] transition-colors cursor-pointer group flex gap-4 p-5">
+
+                          {/* Rank */}
+                          <div className="flex-shrink-0 w-6 pt-0.5">
+                            <span
+                              className={`text-sm font-bold tabular-nums leading-none ${
+                                post.rank === 1
+                                  ? "text-neutral-300"
+                                  : post.rank <= 3
+                                  ? "text-neutral-500"
+                                  : "text-neutral-700"
+                              }`}
+                            >
+                              {post.rank}
+                            </span>
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            {/* Author row */}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-[9px] font-semibold text-neutral-500 flex-shrink-0">
+                                  {getInitials(post.author_name)}
+                                </div>
+                                <span className="text-xs font-medium text-neutral-400">
+                                  {post.author_name}
+                                </span>
+                                <span className="text-neutral-700 text-xs">·</span>
+                                <span className="text-[11px] text-neutral-600 flex items-center gap-1">
+                                  <Clock size={10} strokeWidth={1.5} />
+                                  {post.read_time} min
+                                </span>
+                                <span className="text-neutral-700 text-xs">·</span>
+                                <span className="text-[11px] text-neutral-700">
+                                  {getRelativeTime(post.created_at)}
+                                </span>
+                              </div>
+                              {post.genre && (
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 bg-[#1a1a1a] border border-[#272727] px-2 py-0.5 flex-shrink-0">
+                                  {post.genre}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Title */}
+                            <h3 className="text-sm font-semibold text-white leading-snug mb-2 tracking-tight group-hover:text-neutral-200 transition-colors">
+                              {post.title}
+                            </h3>
+
+                            {/* Excerpt */}
+                            <p className="text-[12px] text-neutral-600 leading-relaxed line-clamp-2 mb-3">
+                              {post.excerpt}
+                            </p>
+
+                            {/* Actions */}
+                            <div
+                              className="flex items-center gap-5 text-neutral-700"
+                              onClick={(e) => e.preventDefault()}
+                            >
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleLike(post.id);
+                                }}
+                                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                  liked
+                                    ? "text-red-400"
+                                    : "hover:text-neutral-400"
+                                }`}
+                              >
+                                <Heart
+                                  size={12}
+                                  strokeWidth={1.5}
+                                  fill={liked ? "currentColor" : "none"}
+                                />
+                                <span>{formatCount(likeCount)}</span>
+                              </button>
+
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <MessageCircle size={12} strokeWidth={1.5} />
+                                <span>
+                                  {formatCount(post.comments_count)}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleBookmark(post.id);
+                                }}
+                                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                  bookmarked
+                                    ? "text-amber-400"
+                                    : "hover:text-neutral-400"
+                                }`}
+                              >
+                                <Bookmark
+                                  size={12}
+                                  strokeWidth={1.5}
+                                  fill={bookmarked ? "currentColor" : "none"}
+                                />
+                                <span>{bookmarked ? "Saved" : "Save"}</span>
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Right sidebar ── */}
+            <div className="space-y-5">
+
+              {/* Trending topics */}
+              <section>
+                <SectionHeader
+                  icon={<Hash size={11} strokeWidth={1.6} />}
+                  label="Trending Topics"
+                />
+                <div className="divide-y divide-[#141414]">
+                  {TRENDING_TOPICS.map((topic, idx) => (
                     <div
                       key={idx}
-                      className="p-3 bg-neutral-800/50 border border-neutral-800 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
+                      className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0 cursor-pointer group"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-neutral-300 text-sm">
+                      <div>
+                        <p className="text-[12px] font-medium text-neutral-400 group-hover:text-neutral-200 transition-colors">
                           #{topic.tag}
-                        </span>
-                        <span className="px-2 py-0.5 bg-green-500/10 text-green-400 border border-green-500/20 rounded text-xs font-medium">
-                          {topic.growth}
-                        </span>
-                      </div>
-                      <p className="text-xs text-neutral-600">
-                        {topic.posts} posts
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Trending Authors */}
-              <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-                  <Users
-                    className="mr-2 text-neutral-500"
-                    size={16}
-                    strokeWidth={1.5}
-                  />
-                  Trending Authors
-                </h3>
-                <div className="space-y-4">
-                  {trendingAuthors.map((author, idx) => (
-                    <div key={idx} className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
-                        {author.avatar}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-neutral-300 text-sm truncate">
-                          {author.name}
                         </p>
-                        <div className="flex items-center space-x-2 text-xs text-neutral-600">
-                          <span>{author.followers} followers</span>
-                          <span className="text-green-400">
-                            {author.newFollowers} new
-                          </span>
-                        </div>
+                        <p className="text-[10px] text-neutral-700 mt-0.5">
+                          {topic.posts} posts
+                        </p>
                       </div>
-                      <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded text-xs font-medium transition flex-shrink-0">
-                        Follow
-                      </button>
+                      <span className="text-[10px] font-semibold text-emerald-500 tabular-nums">
+                        {topic.growth}
+                      </span>
                     </div>
                   ))}
                 </div>
               </section>
 
-              {/* Info Box */}
-              <section className="bg-gradient-to-br from-neutral-800 to-neutral-900 border border-neutral-700 rounded-lg p-6">
-                <TrendingUp
-                  className="text-neutral-400 mb-3"
-                  size={32}
-                  strokeWidth={1.5}
+              {/* Trending authors */}
+              <section>
+                <SectionHeader
+                  icon={<Users size={11} strokeWidth={1.6} />}
+                  label="Writers to Watch"
                 />
-                <h3 className="text-lg font-serif text-neutral-200 mb-2">
-                  How Trending Works
-                </h3>
-                <p className="text-sm text-neutral-400 mb-4">
-                  Posts are ranked by engagement velocity—how quickly they gain
-                  likes, comments, and views. The algorithm updates every hour.
+
+                {loadingAuthors ? (
+                  <div className="space-y-3">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <Skeleton className="w-7 h-7 rounded-full flex-shrink-0" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-2.5 w-1/2" />
+                          <Skeleton className="h-2 w-1/3" />
+                        </div>
+                        <Skeleton className="h-6 w-14" />
+                      </div>
+                    ))}
+                  </div>
+                ) : trendingAuthors.length === 0 ? (
+                  <p className="text-[11px] text-neutral-700 italic">
+                    No authors to show.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-[#141414]">
+                    {trendingAuthors.map((author) => (
+                      <div
+                        key={author.id}
+                        className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+                      >
+                        <div className="w-7 h-7 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-[9px] font-semibold text-neutral-500 flex-shrink-0">
+                          {getInitials(author.full_name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium text-neutral-400 truncate leading-tight">
+                            {author.full_name}
+                          </p>
+                          <p className="text-[10px] text-neutral-600 mt-0.5">
+                            @
+                            {author.full_name
+                              .toLowerCase()
+                              .replace(/\s+/g, "")}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() =>
+                            toggleFollow(author.id, author.is_following)
+                          }
+                          disabled={followLoadingId === author.id}
+                          className={`flex-shrink-0 text-[10px] font-semibold px-3 py-1.5 border transition-all disabled:opacity-50 tracking-wide ${
+                            author.is_following
+                              ? "border-[#1f1f1f] text-neutral-600 hover:border-red-900/40 hover:text-red-400"
+                              : "border-[#2a2a2a] text-neutral-400 hover:border-[#3a3a3a] hover:text-white"
+                          }`}
+                        >
+                          {followLoadingId === author.id
+                            ? "…"
+                            : author.is_following
+                            ? "Following"
+                            : "Follow"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* How ranking works — compact, no gradient */}
+              <section className="bg-[#111] border border-[#1f1f1f] p-4">
+                <p className="text-[11px] font-semibold text-neutral-400 mb-2 tracking-tight">
+                  How ranking works
                 </p>
-                <div className="space-y-2 text-xs text-neutral-500">
-                  <div className="flex items-center space-x-2">
-                    <Flame size={14} className="text-red-400" />
-                    <span>
-                      <strong className="text-neutral-400">Hot:</strong> Rapid
-                      growth in last 6 hours
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <TrendingUp size={14} className="text-orange-400" />
-                    <span>
-                      <strong className="text-neutral-400">Rising:</strong>{" "}
-                      Steady engagement increase
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <MessageCircle size={14} className="text-purple-400" />
-                    <span>
-                      <strong className="text-neutral-400">
-                        Controversial:
-                      </strong>{" "}
-                      High comment ratio
-                    </span>
-                  </div>
-                </div>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Posts are ranked by engagement velocity — likes and comments
+                  weighted by recency. Updated hourly.
+                </p>
               </section>
             </div>
           </div>
