@@ -20,7 +20,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LeftSidebar from "@/app/components/Sidebar";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SMLPost {
   id: string;
@@ -49,17 +48,7 @@ interface SuggestedUser {
   is_following: boolean;
 }
 
-interface NYTBook {
-  title: string;
-  author: string;
-  description: string;
-  amazon_product_url: string;
-  rank: number;
-  weeks_on_list: number;
-  publisher: string;
-}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getRelativeTime = (dateString: string): string => {
   const diff = Math.floor(
@@ -81,7 +70,6 @@ const getInitials = (name: string) =>
     .join("")
     .toUpperCase();
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function Skeleton({ className }: { className?: string }) {
   return (
@@ -113,7 +101,6 @@ function PostSkeleton() {
   );
 }
 
-// ─── Post card (matches feed exactly) ────────────────────────────────────────
 
 function PostCard({
   post,
@@ -132,7 +119,7 @@ function PostCard({
 }) {
   return (
     <Link href={`/dashboard/posts/${post.id}`}>
-      <article className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] transition-colors cursor-pointer group my-5">
+      <article className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] transition-colors cursor-pointer group my-3">
         {post.cover_image_url && (
           <div
             className="w-full h-40 bg-[#161616] bg-cover bg-center"
@@ -281,42 +268,35 @@ const INTERNAL_TRENDING: TrendingTopic[] = [
 export default function DiscoverPage() {
   const router = useRouter();
 
-  // ── Search state ───────────────────────────────────────────────────────────
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeGenre, setActiveGenre] = useState("All");
 
-  // ── Posts ──────────────────────────────────────────────────────────────────
   const [posts, setPosts] = useState<SMLPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [postInteractions, setPostInteractions] = useState<
     Record<string, { liked: boolean; bookmarked: boolean; likeCount: number }>
   >({});
 
-  // ── NYT Books ──────────────────────────────────────────────────────────────
-  const [nytBooks, setNytBooks] = useState<NYTBook[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
 
-  // ── Suggested users ────────────────────────────────────────────────────────
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // ── Debounce search ────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 350);
     return () => clearTimeout(t);
   }, [query]);
 
-  // ── Fetch posts ────────────────────────────────────────────────────────────
   const fetchPosts = useCallback(async () => {
     setLoadingPosts(true);
     try {
-      const params = new URLSearchParams({ limit: "20" });
+
+      const params = new URLSearchParams({ limit: "100" });
       if (debouncedQuery) params.set("search", debouncedQuery);
-      if (activeGenre !== "All") params.set("genre", activeGenre);
 
       const res = await fetch(`/api/posts?${params}`, {
         credentials: "include",
@@ -337,9 +317,17 @@ export default function DiscoverPage() {
         cover_image_url: p.cover_image_url || null,
       }));
 
-      setPosts(fetched);
+      const filtered =
+        activeGenre === "All"
+          ? fetched
+          : fetched.filter(
+              (p) =>
+                p.genre?.toLowerCase().trim() ===
+                activeGenre.toLowerCase().trim()
+            );
 
-      // Fetch interaction state for each post
+      setPosts(filtered);
+
       const interactions: typeof postInteractions = {};
       await Promise.all(
         fetched.map(async (p) => {
@@ -376,38 +364,8 @@ export default function DiscoverPage() {
     fetchPosts();
   }, [fetchPosts]);
 
-  // ── Fetch NYT books ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const fetch_ = async () => {
-      setLoadingBooks(true);
-      try {
-        const res = await fetch(
-          "https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json?api-key=DEMO_KEY"
-        );
-        const data = await res.json();
-        if (data.results?.books) {
-          setNytBooks(
-            data.results.books.slice(0, 6).map((b: any) => ({
-              title: b.title,
-              author: b.author,
-              description: b.description,
-              amazon_product_url: b.amazon_product_url,
-              rank: b.rank,
-              weeks_on_list: b.weeks_on_list,
-              publisher: b.publisher,
-            }))
-          );
-        }
-      } catch (e) {
-        console.error("Error fetching NYT books:", e);
-      } finally {
-        setLoadingBooks(false);
-      }
-    };
-    fetch_();
-  }, []);
 
-  // ── Fetch suggested users ──────────────────────────────────────────────────
+
   useEffect(() => {
     const fetch_ = async () => {
       setLoadingUsers(true);
@@ -427,7 +385,6 @@ export default function DiscoverPage() {
     fetch_();
   }, []);
 
-  // ── Interactions ───────────────────────────────────────────────────────────
 
   const handleLike = async (postId: string) => {
     const current = postInteractions[postId];
@@ -508,7 +465,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-neutral-200">
@@ -517,7 +473,6 @@ export default function DiscoverPage() {
       <main className="lg:ml-[240px] min-h-screen">
         <div className="max-w-[1200px] mx-auto px-5 py-6">
 
-          {/* ── Search bar ── */}
           <div className="relative mb-6">
             <Search
               className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-600"
@@ -542,7 +497,6 @@ export default function DiscoverPage() {
             )}
           </div>
 
-          {/* ── Genre filter tabs ── */}
           <div className="flex gap-0 border-b border-[#1a1a1a] mb-6 overflow-x-auto [scrollbar-width:none]">
             {GENRES.map((g) => (
               <button
@@ -583,7 +537,7 @@ export default function DiscoverPage() {
                     ))}
                   </div>
                 ) : posts.length === 0 ? (
-                  <div className="bg-[#111] border border-[#1f1f1f] p-12 text-center space-y-4">
+                  <div className="bg-[#111] border border-[#1f1f1f] p-12 text-center">
                     <BookOpen
                       size={32}
                       strokeWidth={1.2}
@@ -621,7 +575,6 @@ export default function DiscoverPage() {
                   </div>
                 )}
               </section>
-
               <section>
                 <SectionHeader
                   icon={<Hash size={11} strokeWidth={1.6} />}
@@ -660,7 +613,7 @@ export default function DiscoverPage() {
                 />
 
                 {loadingUsers ? (
-                  <div className="space-y-5 ">
+                  <div className="space-y-3">
                     {[...Array(4)].map((_, i) => (
                       <div key={i} className="flex items-center gap-3">
                         <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
