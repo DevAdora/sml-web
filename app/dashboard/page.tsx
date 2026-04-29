@@ -577,36 +577,6 @@ export default function SMLDashboard() {
     return () => observer.disconnect();
   }, [loadMorePosts, hasMore, isLoadingMore]);
 
-  // Trending books
-  useEffect(() => {
-    const fetchTrending = async () => {
-      setLoadingTrending(true);
-      try {
-        const res = await fetch(
-          "https://api.nytimes.com/svc/books/v3/lists/current/hardcover-fiction.json?api-key=DEMO_KEY"
-        );
-        const data = await res.json();
-        if (data.results?.books) {
-          setTrendingBooks(
-            data.results.books.slice(0, 5).map((b: any) => ({
-              title: b.title,
-              author: b.author,
-              category: "Fiction",
-              discussions: Math.floor(Math.random() * 500) + 100,
-              link: b.amazon_product_url,
-            }))
-          );
-        }
-      } catch (e) {
-        console.error("Error fetching trending:", e);
-      } finally {
-        setLoadingTrending(false);
-      }
-    };
-    fetchTrending();
-  }, []);
-
-  // User
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -631,7 +601,6 @@ export default function SMLDashboard() {
     fetchUser();
   }, []);
 
-  // Back-to-top visibility
   useEffect(() => {
     const handleScroll = () => setShowBackToTop(window.scrollY > 600);
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -647,7 +616,6 @@ export default function SMLDashboard() {
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-neutral-200">
@@ -656,7 +624,6 @@ export default function SMLDashboard() {
       <main ref={mainRef} className="pt-16 lg:pt-0 lg:ml-72 lg:mr-96 min-h-screen">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
 
-          {/* ── Welcome banner (only when logged in) ── */}
           {user && (
             <div className="mb-8 bg-[#111] border border-[#1f1f1f] p-5 flex items-center justify-between">
               <div>
@@ -673,7 +640,6 @@ export default function SMLDashboard() {
             </div>
           )}
 
-          {/* ── Feed header ── */}
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-semibold text-white tracking-tight">
@@ -686,7 +652,6 @@ export default function SMLDashboard() {
             <SortDropdown value={sortMode} onChange={setSortMode} />
           </div>
 
-          {/* ── Filter tabs ── */}
           <div className="flex border-b border-[#1f1f1f] mb-6 overflow-x-auto scrollbar-none">
             {FILTER_TABS.map((tab) => (
               <button
@@ -703,7 +668,6 @@ export default function SMLDashboard() {
             ))}
           </div>
 
-          {/* ── Feed content ── */}
           {loadingPosts ? (
             <div className="space-y-3">
               {[...Array(4)].map((_, i) => (

@@ -1,383 +1,694 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search,
-  BookOpen,
   TrendingUp,
-  Star,
   Users,
-  Filter,
+  Hash,
+  BookOpen,
+  Clock,
+  Heart,
+  MessageCircle,
+  Bookmark,
+  ExternalLink,
+  Loader,
+  X,
+  ArrowUpRight,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import LeftSidebar from "@/app/components/Sidebar";
 
-export default function DiscoverPage() {
 
-  const featuredBooks = [
-    {
-      id: 1,
-      title: "The Midnight Library",
-      author: "Matt Haig",
-      cover: "📚",
-      rating: 4.8,
-      reviews: 1234,
-      genre: "Fiction",
-      trending: true,
-    },
-    {
-      id: 2,
-      title: "Atomic Habits",
-      author: "James Clear",
-      cover: "📖",
-      rating: 4.9,
-      reviews: 2341,
-      genre: "Self-Help",
-      trending: true,
-    },
-    {
-      id: 3,
-      title: "Project Hail Mary",
-      author: "Andy Weir",
-      cover: "🚀",
-      rating: 4.7,
-      reviews: 892,
-      genre: "Science Fiction",
-      trending: false,
-    },
-    {
-      id: 4,
-      title: "Klara and the Sun",
-      author: "Kazuo Ishiguro",
-      cover: "☀️",
-      rating: 4.6,
-      reviews: 567,
-      genre: "Literary Fiction",
-      trending: false,
-    },
-  ];
+interface SMLPost {
+  id: string;
+  title: string;
+  excerpt: string;
+  author_name: string;
+  genre: string;
+  likes_count: number;
+  comments_count: number;
+  read_time: number;
+  created_at: string;
+  cover_image_url?: string | null;
+}
 
-  const topReviewers = [
-    {
-      name: "Sarah Mitchell",
-      reviews: 234,
-      followers: "12.3k",
-      avatar: "SM",
-      specialty: "Fiction & Classics",
-    },
-    {
-      name: "James Chen",
-      reviews: 189,
-      followers: "8.9k",
-      avatar: "JC",
-      specialty: "Sci-Fi & Fantasy",
-    },
-    {
-      name: "Emma Wordsworth",
-      reviews: 156,
-      followers: "15.2k",
-      avatar: "EW",
-      specialty: "Literary Analysis",
-    },
-  ];
+interface TrendingTopic {
+  tag: string;
+  posts: string;
+  growth: string;
+}
 
-  const collections = [
-    {
-      title: "Books That Changed My Life",
-      curator: "Sarah M.",
-      books: 12,
-      followers: 2341,
-      preview: ["📚", "📖", "📕"],
-    },
-    {
-      title: "Essential Science Fiction",
-      curator: "James C.",
-      books: 24,
-      followers: 1823,
-      preview: ["🚀", "🛸", "👽"],
-    },
-    {
-      title: "Cozy Mystery Novels",
-      curator: "Detective Dana",
-      books: 18,
-      followers: 1456,
-      preview: ["🔍", "🕵️", "📜"],
-    },
-  ];
+interface SuggestedUser {
+  id: string;
+  full_name: string;
+  post_count?: number;
+  follower_count?: number;
+  is_following: boolean;
+}
 
-  const trendingTopics = [
-    { tag: "book-recommendations", posts: "5.1k", growth: "+8%" },
-    { tag: "reading-challenge-2024", posts: "1.8k", growth: "+25%" },
-    { tag: "literary-fiction", posts: "2.3k", growth: "+12%" },
-    { tag: "book-club-picks", posts: "923", growth: "+18%" },
-    { tag: "indie-authors", posts: "892", growth: "+15%" },
-    { tag: "poetry-corner", posts: "1.2k", growth: "+5%" },
-  ];
 
-  const handleSignOut = () => {
-    console.log("User signed out");
-  };
 
+const getRelativeTime = (dateString: string): string => {
+  const diff = Math.floor(
+    (Date.now() - new Date(dateString).getTime()) / 1000
+  );
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(dateString).toLocaleDateString();
+};
+
+const getInitials = (name: string) =>
+  (name || "??")
+    .trim()
+    .split(" ")
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+
+
+function Skeleton({ className }: { className?: string }) {
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-200">
-      <LeftSidebar onSignOut={handleSignOut} />
+    <div
+      className={`bg-[#1a1a1a] animate-pulse ${className ?? ""}`}
+    />
+  );
+}
 
-      <main className="ml-72 min-h-screen">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="mb-8">
-            <div className="relative">
-              <Search
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-500"
-                size={20}
-                strokeWidth={1.5}
-              />
-              <input
-                type="text"
-                placeholder="Search books, reviews, authors..."
-                className="w-full pl-12 pr-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-neutral-700 focus:border-neutral-700 text-neutral-200 placeholder-neutral-500"
-              />
+function PostSkeleton() {
+  return (
+    <div className="bg-[#111] border border-[#1f1f1f] p-5">
+      <div className="flex items-center gap-3 mb-4">
+        <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+        <div className="flex-1 space-y-1.5">
+          <Skeleton className="h-2.5 w-1/3" />
+          <Skeleton className="h-2 w-1/4" />
+        </div>
+      </div>
+      <Skeleton className="h-4 w-3/4 mb-2" />
+      <Skeleton className="h-2.5 w-full mb-1.5" />
+      <Skeleton className="h-2.5 w-5/6 mb-4" />
+      <div className="flex gap-4">
+        <Skeleton className="h-2 w-8" />
+        <Skeleton className="h-2 w-8" />
+        <Skeleton className="h-2 w-10" />
+      </div>
+    </div>
+  );
+}
+
+
+function PostCard({
+  post,
+  onLike,
+  onBookmark,
+  liked,
+  bookmarked,
+  likeCount,
+}: {
+  post: SMLPost;
+  onLike: (id: string) => void;
+  onBookmark: (id: string) => void;
+  liked: boolean;
+  bookmarked: boolean;
+  likeCount: number;
+}) {
+  return (
+    <Link href={`/dashboard/posts/${post.id}`}>
+      <article className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] transition-colors cursor-pointer group my-3">
+        {post.cover_image_url && (
+          <div
+            className="w-full h-40 bg-[#161616] bg-cover bg-center"
+            style={{ backgroundImage: `url(${post.cover_image_url})` }}
+          />
+        )}
+        <div className="p-5">
+          <div className="flex items-start justify-between mb-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-[10px] font-semibold text-neutral-500 flex-shrink-0">
+                {getInitials(post.author_name)}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-neutral-300 leading-tight">
+                  {post.author_name}
+                </p>
+                <div className="flex items-center gap-1.5 text-[11px] text-neutral-600 mt-0.5">
+                  <span>{getRelativeTime(post.created_at)}</span>
+                  <span>·</span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={10} strokeWidth={1.5} />
+                    {post.read_time} min
+                  </span>
+                </div>
+              </div>
             </div>
+            {post.genre && (
+              <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 bg-[#1a1a1a] border border-[#272727] px-2.5 py-1 flex-shrink-0">
+                {post.genre}
+              </span>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-serif text-neutral-200 flex items-center">
-                    <TrendingUp
-                      className="mr-2 text-neutral-400"
-                      size={20}
-                      strokeWidth={1.5}
-                    />
-                    Featured Books
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {featuredBooks.map((book) => (
-                    <div
-                      key={book.id}
-                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-5 hover:border-neutral-700 transition cursor-pointer group"
-                    >
-                      <div className="flex space-x-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-16 h-20 bg-neutral-800 border border-neutral-700 rounded flex items-center justify-center text-3xl">
-                            {book.cover}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-neutral-100 group-hover:text-neutral-300 transition truncate">
-                                {book.title}
-                              </h3>
-                              <p className="text-sm text-neutral-500">
-                                by {book.author}
-                              </p>
-                            </div>
-                            {book.trending && (
-                              <TrendingUp
-                                className="text-neutral-400 flex-shrink-0 ml-2"
-                                size={16}
-                                strokeWidth={1.5}
-                              />
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-3 text-xs text-neutral-500">
-                            <span className="flex items-center">
-                              <Star
-                                className="mr-1 text-neutral-400"
-                                size={12}
-                                strokeWidth={1.5}
-                              />
-                              {book.rating}
-                            </span>
-                            <span>{book.reviews} reviews</span>
-                          </div>
-                          <span className="inline-block mt-2 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400">
-                            {book.genre}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
+          <h3 className="text-base font-semibold text-white leading-snug mb-2 tracking-tight group-hover:text-neutral-200 transition-colors">
+            {post.title}
+          </h3>
+          <p className="text-sm text-neutral-500 leading-relaxed line-clamp-2 mb-4">
+            {post.excerpt}
+          </p>
+
+          <div
+            className="flex items-center gap-5 text-neutral-600"
+            onClick={(e) => e.preventDefault()}
+          >
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                onLike(post.id);
+              }}
+              className={`flex items-center gap-1.5 text-xs transition-colors ${
+                liked ? "text-red-400" : "hover:text-neutral-300"
+              }`}
+            >
+              <Heart
+                size={13}
+                strokeWidth={1.5}
+                fill={liked ? "currentColor" : "none"}
+              />
+              <span>{likeCount}</span>
+            </button>
+            <div className="flex items-center gap-1.5 text-xs">
+              <MessageCircle size={13} strokeWidth={1.5} />
+              <span>{post.comments_count}</span>
+            </div>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                onBookmark(post.id);
+              }}
+              className={`flex items-center gap-1.5 text-xs transition-colors ${
+                bookmarked ? "text-amber-400" : "hover:text-neutral-300"
+              }`}
+            >
+              <Bookmark
+                size={13}
+                strokeWidth={1.5}
+                fill={bookmarked ? "currentColor" : "none"}
+              />
+              <span>{bookmarked ? "Saved" : "Save"}</span>
+            </button>
+            <span className="ml-auto text-[11px] text-neutral-700">
+              {post.read_time} min
+            </span>
+          </div>
+        </div>
+      </article>
+    </Link>
+  );
+}
+
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({
+  icon,
+  label,
+  count,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <span className="text-neutral-700">{icon}</span>
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500">
+        {label}
+      </h2>
+      {count !== undefined && (
+        <span className="text-[10px] text-neutral-700 ml-1">
+          {count} results
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+const GENRES = [
+  "All",
+  "Fiction",
+  "Non-Fiction",
+  "Literary Analysis",
+  "Book Review",
+  "Essay",
+  "Opinion",
+  "Poetry",
+  "Science Fiction",
+  "Fantasy",
+  "Mystery",
+  "Thriller",
+  "Biography",
+  "Philosophy",
+  "Contemporary",
+];
+
+const INTERNAL_TRENDING: TrendingTopic[] = [
+  { tag: "literary-fiction", posts: "2.3k", growth: "+12%" },
+  { tag: "book-recommendations", posts: "5.1k", growth: "+8%" },
+  { tag: "reading-challenge-2024", posts: "1.8k", growth: "+25%" },
+  { tag: "indie-authors", posts: "892", growth: "+15%" },
+  { tag: "poetry-corner", posts: "1.2k", growth: "+5%" },
+  { tag: "book-club-picks", posts: "923", growth: "+18%" },
+];
+
+export default function DiscoverPage() {
+  const router = useRouter();
+
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [activeGenre, setActiveGenre] = useState("All");
+
+  const [posts, setPosts] = useState<SMLPost[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [postInteractions, setPostInteractions] = useState<
+    Record<string, { liked: boolean; bookmarked: boolean; likeCount: number }>
+  >({});
+
+  const [loadingBooks, setLoadingBooks] = useState(true);
+
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
+
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 350);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const fetchPosts = useCallback(async () => {
+    setLoadingPosts(true);
+    try {
+
+      const params = new URLSearchParams({ limit: "100" });
+      if (debouncedQuery) params.set("search", debouncedQuery);
+
+      const res = await fetch(`/api/posts?${params}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch posts");
+      const data = await res.json();
+
+      const fetched: SMLPost[] = (data.posts || []).map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        excerpt: p.excerpt || "",
+        author_name: p.author_name || "Anonymous",
+        genre: p.genre || "",
+        likes_count: p.likes_count || 0,
+        comments_count: p.comments_count || 0,
+        read_time: p.read_time || 1,
+        created_at: p.created_at || p.published_at,
+        cover_image_url: p.cover_image_url || null,
+      }));
+
+      const filtered =
+        activeGenre === "All"
+          ? fetched
+          : fetched.filter(
+              (p) =>
+                p.genre?.toLowerCase().trim() ===
+                activeGenre.toLowerCase().trim()
+            );
+
+      setPosts(filtered);
+
+      const interactions: typeof postInteractions = {};
+      await Promise.all(
+        fetched.map(async (p) => {
+          try {
+            const r = await fetch(`/api/posts/${p.id}`, {
+              credentials: "include",
+            });
+            if (r.ok) {
+              const d = await r.json();
+              interactions[p.id] = {
+                liked: d.user_liked || false,
+                bookmarked: d.user_bookmarked || false,
+                likeCount: d.likes_count || p.likes_count,
+              };
+            }
+          } catch {
+            interactions[p.id] = {
+              liked: false,
+              bookmarked: false,
+              likeCount: p.likes_count,
+            };
+          }
+        })
+      );
+      setPostInteractions(interactions);
+    } catch (e) {
+      console.error("Error fetching posts:", e);
+    } finally {
+      setLoadingPosts(false);
+    }
+  }, [debouncedQuery, activeGenre]);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+
+
+  useEffect(() => {
+    const fetch_ = async () => {
+      setLoadingUsers(true);
+      try {
+        const res = await fetch("/api/user/suggested?limit=5", {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setSuggestedUsers(data.users || []);
+      } catch {
+        setSuggestedUsers([]);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    fetch_();
+  }, []);
+
+
+  const handleLike = async (postId: string) => {
+    const current = postInteractions[postId];
+    const newLiked = !current?.liked;
+    setPostInteractions((prev) => ({
+      ...prev,
+      [postId]: {
+        ...prev[postId],
+        liked: newLiked,
+        likeCount: newLiked
+          ? (prev[postId]?.likeCount || 0) + 1
+          : Math.max((prev[postId]?.likeCount || 0) - 1, 0),
+      },
+    }));
+    try {
+      await fetch(`/api/posts/${postId}/like`, {
+        method: newLiked ? "POST" : "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      setPostInteractions((prev) => ({ ...prev, [postId]: current }));
+    }
+  };
+
+  const handleBookmark = async (postId: string) => {
+    const current = postInteractions[postId];
+    const newBookmarked = !current?.bookmarked;
+    setPostInteractions((prev) => ({
+      ...prev,
+      [postId]: { ...prev[postId], bookmarked: newBookmarked },
+    }));
+    try {
+      await fetch(`/api/posts/${postId}/bookmark`, {
+        method: newBookmarked ? "POST" : "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      setPostInteractions((prev) => ({ ...prev, [postId]: current }));
+    }
+  };
+
+  const toggleFollow = async (userId: string, currentlyFollowing: boolean) => {
+    setFollowLoadingId(userId);
+    setSuggestedUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId ? { ...u, is_following: !currentlyFollowing } : u
+      )
+    );
+    try {
+      const res = await fetch(`/api/user/${userId}/follow`, {
+        method: currentlyFollowing ? "DELETE" : "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        setSuggestedUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId ? { ...u, is_following: currentlyFollowing } : u
+          )
+        );
+      }
+    } catch {
+      setSuggestedUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, is_following: currentlyFollowing } : u
+        )
+      );
+    } finally {
+      setFollowLoadingId(null);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/logout", { method: "POST", credentials: "include" });
+      window.location.href = "/";
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-neutral-200">
+      <LeftSidebar onSignOut={handleSignOut} />
+
+      <main className="lg:ml-[240px] min-h-screen">
+        <div className="max-w-[1200px] mx-auto px-5 py-6">
+
+          <div className="relative mb-6">
+            <Search
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-600"
+              size={15}
+              strokeWidth={1.5}
+            />
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search posts, authors, genres…"
+              className="w-full pl-10 pr-10 py-2.5 bg-[#111] border border-[#1f1f1f] text-neutral-200 text-sm placeholder-neutral-700 focus:outline-none focus:border-[#2a2a2a] transition-colors"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-neutral-400 transition-colors"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-0 border-b border-[#1a1a1a] mb-6 overflow-x-auto [scrollbar-width:none]">
+            {GENRES.map((g) => (
+              <button
+                key={g}
+                onClick={() => setActiveGenre(g)}
+                className={`text-[11px] font-medium px-3.5 py-2.5 border-b-2 whitespace-nowrap flex-shrink-0 transition-all ${
+                  activeGenre === g
+                    ? "border-white text-white"
+                    : "border-transparent text-neutral-600 hover:text-neutral-300"
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
+
+            <div className="space-y-6">
 
               <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-serif text-neutral-200 flex items-center">
+                <SectionHeader
+                  icon={<TrendingUp size={11} strokeWidth={1.6} />}
+                  label={
+                    debouncedQuery
+                      ? `Results for "${debouncedQuery}"`
+                      : activeGenre !== "All"
+                      ? `${activeGenre} posts`
+                      : "Discover Posts"
+                  }
+                  count={loadingPosts ? undefined : posts.length}
+                />
+
+                {loadingPosts ? (
+                  <div className="space-y-3">
+                    {[...Array(4)].map((_, i) => (
+                      <PostSkeleton key={i} />
+                    ))}
+                  </div>
+                ) : posts.length === 0 ? (
+                  <div className="bg-[#111] border border-[#1f1f1f] p-12 text-center">
                     <BookOpen
-                      className="mr-2 text-neutral-400"
-                      size={20}
-                      strokeWidth={1.5}
+                      size={32}
+                      strokeWidth={1.2}
+                      className="mx-auto mb-3 text-neutral-700"
                     />
-                    Curated Collections
-                  </h2>
-                </div>
-                <div className="space-y-3">
-                  {collections.map((collection, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-5 hover:border-neutral-700 transition cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-neutral-100 mb-1">
-                            {collection.title}
-                          </h3>
-                          <p className="text-sm text-neutral-500 mb-3">
-                            Curated by {collection.curator}
-                          </p>
-                          <div className="flex items-center space-x-4 text-xs text-neutral-600">
-                            <span>{collection.books} books</span>
-                            <span className="flex items-center">
-                              <Users
-                                size={12}
-                                className="mr-1"
-                                strokeWidth={1.5}
-                              />
-                              {collection.followers}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex space-x-1 ml-4">
-                          {collection.preview.map((emoji, i) => (
-                            <div
-                              key={i}
-                              className="w-10 h-12 bg-neutral-800 border border-neutral-700 rounded flex items-center justify-center text-lg"
-                            >
-                              {emoji}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    <p className="text-sm text-neutral-500 mb-1">
+                      {debouncedQuery
+                        ? `No posts found for "${debouncedQuery}"`
+                        : "No posts in this genre yet"}
+                    </p>
+                    <p className="text-xs text-neutral-700">
+                      {debouncedQuery
+                        ? "Try a different search term"
+                        : "Be the first to write one"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {posts.map((post) => (
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        onLike={handleLike}
+                        onBookmark={handleBookmark}
+                        liked={postInteractions[post.id]?.liked || false}
+                        bookmarked={
+                          postInteractions[post.id]?.bookmarked || false
+                        }
+                        likeCount={
+                          postInteractions[post.id]?.likeCount ??
+                          post.likes_count
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
-
               <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-serif text-neutral-200">
-                    Trending Topics
-                  </h2>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {trendingTopics.map((topic, idx) => (
-                    <div
+                <SectionHeader
+                  icon={<Hash size={11} strokeWidth={1.6} />}
+                  label="Trending in SML"
+                />
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {INTERNAL_TRENDING.map((topic, idx) => (
+                    <button
                       key={idx}
-                      className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 hover:bg-neutral-800 transition cursor-pointer"
+                      onClick={() => setQuery(topic.tag)}
+                      className="bg-[#111] border border-[#1f1f1f] px-4 py-3 text-left hover:border-[#2a2a2a] transition-colors group"
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-neutral-300 text-sm">
+                        <p className="text-[12px] font-medium text-neutral-400 group-hover:text-neutral-200 transition-colors truncate">
                           #{topic.tag}
-                        </span>
-                        <span className="text-xs text-neutral-500">
+                        </p>
+                        <span className="text-[10px] font-semibold text-emerald-500 flex-shrink-0 ml-2">
                           {topic.growth}
                         </span>
                       </div>
-                      <p className="text-xs text-neutral-600">
+                      <p className="text-[10px] text-neutral-700">
                         {topic.posts} posts
                       </p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </section>
             </div>
 
-            <div className="space-y-6">
-              <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center">
-                  <Users
-                    className="mr-2 text-neutral-500"
-                    size={16}
-                    strokeWidth={1.5}
-                  />
-                  Top Reviewers
-                </h3>
-                <div className="space-y-4">
-                  {topReviewers.map((reviewer, idx) => (
-                    <div key={idx} className="flex items-start space-x-3">
-                      <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 text-xs font-medium flex-shrink-0">
-                        {reviewer.avatar}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-neutral-300 text-sm truncate">
-                          {reviewer.name}
-                        </p>
-                        <p className="text-xs text-neutral-600 truncate">
-                          {reviewer.specialty}
-                        </p>
-                        <div className="flex items-center space-x-3 mt-1 text-xs text-neutral-600">
-                          <span>{reviewer.reviews} reviews</span>
-                          <span>{reviewer.followers} followers</span>
-                        </div>
-                      </div>
-                      <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 rounded text-xs font-medium transition flex-shrink-0">
-                        Follow
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
+            <div className="space-y-5">
 
-              <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-                <h3 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4">
-                  Community Stats
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-400">
-                      Books Reviewed
-                    </span>
-                    <span className="text-lg font-semibold text-neutral-200">
-                      12.4K
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-400">
-                      Active Readers
-                    </span>
-                    <span className="text-lg font-semibold text-neutral-200">
-                      3.2K
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-400">
-                      Reading Lists
-                    </span>
-                    <span className="text-lg font-semibold text-neutral-200">
-                      892
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-400">
-                      Discussions
-                    </span>
-                    <span className="text-lg font-semibold text-neutral-200">
-                      5.6K
-                    </span>
-                  </div>
-                </div>
-              </section>
-
-              <section className="bg-gradient-to-br from-neutral-800 to-neutral-900 border border-neutral-700 rounded-lg p-6">
-                <BookOpen
-                  className="text-neutral-400 mb-3"
-                  size={32}
-                  strokeWidth={1.5}
+              <section>
+                <SectionHeader
+                  icon={<Users size={11} strokeWidth={1.6} />}
+                  label="Writers to Follow"
                 />
-                <h3 className="text-lg font-serif text-neutral-200 mb-2">
-                  Join the Community
-                </h3>
-                <p className="text-sm text-neutral-400 mb-4">
-                  Share your reviews, create reading lists, and connect with
-                  fellow bookworms.
+
+                {loadingUsers ? (
+                  <div className="space-y-3">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-2.5 w-1/2" />
+                          <Skeleton className="h-2 w-1/3" />
+                        </div>
+                        <Skeleton className="h-6 w-14" />
+                      </div>
+                    ))}
+                  </div>
+                ) : suggestedUsers.length === 0 ? (
+                  <p className="text-[11px] text-neutral-700 italic">
+                    No suggestions yet.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-[#141414]">
+                    {suggestedUsers.map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                      >
+                        <div className="w-8 h-8 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-[10px] font-semibold text-neutral-500 flex-shrink-0">
+                          {getInitials(u.full_name || "")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium text-neutral-400 truncate leading-tight">
+                            {u.full_name || "Anonymous"}
+                          </p>
+                          <p className="text-[10px] text-neutral-600 truncate mt-0.5">
+                            @
+                            {(u.full_name || "user")
+                              .toLowerCase()
+                              .replace(/\s+/g, "")}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => toggleFollow(u.id, u.is_following)}
+                          disabled={followLoadingId === u.id}
+                          className={`
+                            flex-shrink-0 text-[10px] font-semibold px-3 py-1.5
+                            border transition-all disabled:opacity-50 tracking-wide
+                            ${
+                              u.is_following
+                                ? "border-[#1f1f1f] text-neutral-600 hover:border-red-900/40 hover:text-red-400"
+                                : "border-[#2a2a2a] text-neutral-400 hover:border-[#3a3a3a] hover:text-white"
+                            }
+                          `}
+                        >
+                          {followLoadingId === u.id
+                            ? "…"
+                            : u.is_following
+                            ? "Following"
+                            : "Follow"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="border border-[#1f1f1f] bg-[#111] p-5">
+                <p className="text-xs font-semibold text-neutral-300 mb-1 tracking-tight">
+                  Share your perspective
+                </p>
+                <p className="text-[11px] text-neutral-600 mb-4 leading-relaxed">
+                  Write a review, essay, or reading list and reach the SML
+                  community.
                 </p>
                 <button
-                  onClick={() => (window.location.href = "/auth/signup")}
-                  className="w-full bg-neutral-200 hover:bg-neutral-100 text-neutral-900 px-4 py-2 rounded-lg font-medium transition"
+                  onClick={() => router.push("/dashboard/posts")}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 bg-white text-[#0a0a0a] text-xs font-semibold hover:bg-neutral-100 transition-colors"
                 >
-                  Sign Up Free
+                  Write a Post
+                  <ArrowUpRight size={12} strokeWidth={2.5} />
                 </button>
               </section>
             </div>
