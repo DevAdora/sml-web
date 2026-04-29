@@ -1,870 +1,529 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
+  MapPin,
+  Calendar,
+  ExternalLink,
+  Settings,
   MessageCircle,
-  Search,
-  Send,
-  UserPlus,
-  ArrowLeft,
-  CheckCheck,
+  Bookmark,
+  Heart,
   Loader,
-  AlertCircle,
+  Clock,
+  Edit3,
   X,
+  Upload,
+  Globe,
+  Lock,
+  CheckCircle,
 } from "lucide-react";
 import LeftSidebar from "@/app/components/Sidebar";
-import { useRouter } from "next/navigation";
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string;
-  avatar_url?: string | null;
-  bio?: string | null;
-}
+type ProfileDTO = {
+  profile: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    bio: string;
+    location: string;
+    website: string;
+    created_at: string;
+  };
+  stats: {
+    reviews: number;
+    followers: number;
+    following: number;
+    readingLists: number;
+  };
+  viewer: {
+    is_following: boolean;
+    is_me: boolean;
+  };
+};
 
-interface Conversation {
+type PostCard = {
   id: string;
-  participant: Profile;
-  lastMessage: string;
-  lastMessageTime: string;
-  unreadCount: number;
-}
-
-interface MessageProfile {
-  email: string;
-  full_name: string;
-  avatar_url?: string | null;
-}
-
-interface Message {
-  id: string;
-  content: string;
+  title: string;
+  excerpt: string | null;
+  genre: string | null;
   created_at: string;
-  sender_id: string;
-  profiles: MessageProfile;
-  isTemp?: boolean;
-}
-
-interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  avatar_url?: string | null;
-  bio?: string | null;
-}
-
-// ─── API ──────────────────────────────────────────────────────────────────────
-
-const fetchConversations = async (): Promise<{
-  conversations: Conversation[];
-}> => {
-  const res = await fetch("/api/messages/conversations");
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to fetch conversations");
-  }
-  return res.json();
+  read_time: number | null;
+  likes_count: number | null;
+  comments_count: number | null;
 };
 
-const fetchMessages = async (
-  conversationId: string
-): Promise<{ messages: Message[] }> => {
-  const res = await fetch(`/api/messages/${conversationId}`);
-  if (!res.ok) throw new Error("Failed to fetch messages");
-  return res.json();
-};
-
-const fetchAllUsers = async (): Promise<{ users: User[] }> => {
-  const res = await fetch("/api/messages/users?all=true");
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to fetch users");
-  }
-  return res.json();
-};
-
-const sendMessage = async ({
-  conversationId,
-  content,
-}: {
-  conversationId: string;
-  content: string;
-}): Promise<{ message: Message }> => {
-  const res = await fetch(`/api/messages/${conversationId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
-  if (!res.ok) throw new Error("Failed to send message");
-  return res.json();
-};
-
-const createConversation = async (
-  participantId: string
-): Promise<{ conversationId: string; existed: boolean }> => {
-  const res = await fetch("/api/messages/conversations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ participantId }),
-  });
-  if (!res.ok) throw new Error("Failed to create conversation");
-  return res.json();
+type PagedPostsResponse = {
+  posts: PostCard[];
+  page: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const getInitials = (name?: string) => {
-  if (!name) return "?";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+const getInitials = (name: string): string => {
+  if (!name) return "??";
+  const parts = name.trim().split(" ");
+  if (parts.length > 1) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.substring(0, 2).toUpperCase();
 };
 
-const formatTime = (timestamp: string) => {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - date.getTime()) / 60000);
-  if (diff < 1) return "just now";
-  if (diff < 60) return `${diff}m`;
-  if (diff < 1440) return `${Math.floor(diff / 60)}h`;
-  if (diff < 10080) return `${Math.floor(diff / 1440)}d`;
-  return date.toLocaleDateString();
+const getRelativeTime = (dateString: string): string => {
+  const diff = Math.floor(
+    (Date.now() - new Date(dateString).getTime()) / 1000
+  );
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(dateString).toLocaleDateString();
 };
 
-// ─── Shared atoms ─────────────────────────────────────────────────────────────
+const joinLabel = (createdAt: string) =>
+  new Date(createdAt).toLocaleString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
 
-function Avatar({
-  name,
-  size = "md",
-}: {
-  name?: string;
-  size?: "sm" | "md" | "lg";
-}) {
-  const sz =
-    size === "sm"
-      ? "w-7 h-7 text-[9px]"
-      : size === "lg"
-      ? "w-10 h-10 text-xs"
-      : "w-8 h-8 text-[10px]";
+const formatCount = (n: number): string =>
+  n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`bg-[#1a1a1a] animate-pulse ${className ?? ""}`} />;
+}
+
+function PostSkeleton() {
   return (
-    <div
-      className={`${sz} bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center font-semibold text-neutral-500 flex-shrink-0`}
-    >
-      {getInitials(name)}
+    <div className="bg-[#111] border border-[#1f1f1f] p-5">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-2.5 w-1/3" />
+        </div>
+        <Skeleton className="h-5 w-16 ml-4" />
+      </div>
+      <Skeleton className="h-2.5 w-full mb-1.5" />
+      <Skeleton className="h-2.5 w-4/5 mb-4" />
+      <div className="flex gap-4 pt-3 border-t border-[#1a1a1a]">
+        <Skeleton className="h-2 w-8" />
+        <Skeleton className="h-2 w-8" />
+      </div>
     </div>
   );
 }
 
-function ErrorBanner({
-  error,
-  conversationsError,
-  usersError,
+// ─── Inline Edit Panel ────────────────────────────────────────────────────────
+
+function EditPanel({
+  profile,
+  onSave,
   onClose,
 }: {
-  error: string | null;
-  conversationsError: unknown;
-  usersError: unknown;
+  profile: ProfileDTO["profile"];
+  onSave: (updates: Partial<ProfileDTO["profile"]>) => Promise<void>;
   onClose: () => void;
 }) {
-  const msg =
-    error ||
-    (conversationsError as Error | undefined)?.message ||
-    (usersError as Error | undefined)?.message;
-  if (!msg) return null;
-  return (
-    <div className="mx-4 mt-3 flex items-center justify-between gap-2 bg-red-500/8 border border-red-500/15 px-3 py-2.5">
-      <div className="flex items-center gap-2">
-        <AlertCircle size={13} className="text-red-400 flex-shrink-0" />
-        <p className="text-xs text-red-400">{msg}</p>
-      </div>
-      <button onClick={onClose} className="text-red-500 hover:text-red-300">
-        <X size={13} strokeWidth={2} />
-      </button>
-    </div>
-  );
-}
+  const [form, setForm] = useState({
+    full_name: profile.full_name,
+    bio: profile.bio,
+    location: profile.location,
+    website: profile.website,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
-// ─── Conversations list ────────────────────────────────────────────────────────
-
-function ConversationsList({
-  conversations,
-  loading,
-  selected,
-  onSelect,
-  onNewChat,
-  errorBanner,
-}: {
-  conversations: Conversation[];
-  loading: boolean;
-  selected: string | null;
-  onSelect: (id: string) => void;
-  onNewChat: () => void;
-  errorBanner: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="h-[48px] flex items-center justify-between px-4 border-b border-[#1a1a1a] flex-shrink-0">
-        <span className="text-sm font-semibold text-white tracking-tight">
-          Messages
-        </span>
-        <button
-          onClick={onNewChat}
-          title="New message"
-          className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-white hover:bg-[#1a1a1a] transition-colors"
-        >
-          <UserPlus size={14} strokeWidth={1.5} />
-        </button>
-      </div>
-
-      {errorBanner}
-
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader className="animate-spin text-neutral-700" size={20} />
-          </div>
-        ) : conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full px-6 py-16 text-center">
-            <MessageCircle
-              size={28}
-              strokeWidth={1.2}
-              className="text-neutral-700 mb-3"
-            />
-            <p className="text-sm text-neutral-500 mb-1">No conversations</p>
-            <p className="text-xs text-neutral-700 mb-5">
-              Start a conversation with another reader
-            </p>
-            <button
-              onClick={onNewChat}
-              className="text-xs font-semibold text-[#0a0a0a] bg-white px-4 py-2 hover:bg-neutral-100 transition-colors"
-            >
-              New Message
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-[#141414]">
-            {conversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => onSelect(conv.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
-                  selected === conv.id
-                    ? "bg-[#161616]"
-                    : "hover:bg-[#111]"
-                }`}
-              >
-                <Avatar name={conv.participant?.full_name} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <p
-                      className={`text-xs font-medium truncate ${
-                        conv.unreadCount > 0
-                          ? "text-white"
-                          : "text-neutral-400"
-                      }`}
-                    >
-                      {conv.participant?.full_name || "Unknown"}
-                    </p>
-                    {conv.lastMessageTime && (
-                      <span className="text-[10px] text-neutral-700 flex-shrink-0 ml-2">
-                        {formatTime(conv.lastMessageTime)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-neutral-600 truncate">
-                      {conv.lastMessage || "No messages yet"}
-                    </p>
-                    {conv.unreadCount > 0 && (
-                      <span className="flex-shrink-0 w-4 h-4 bg-white text-[#0a0a0a] text-[9px] font-bold flex items-center justify-center">
-                        {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── New chat / user search ────────────────────────────────────────────────────
-
-function NewChatView({
-  searchQuery,
-  setSearchQuery,
-  debouncedQuery,
-  isTyping,
-  usersLoading,
-  filteredUsers,
-  onBack,
-  onCreateConversation,
-  createPending,
-  errorBanner,
-}: {
-  searchQuery: string;
-  setSearchQuery: (q: string) => void;
-  debouncedQuery: string;
-  isTyping: boolean;
-  usersLoading: boolean;
-  filteredUsers: User[];
-  onBack: () => void;
-  onCreateConversation: (id: string) => void;
-  createPending: boolean;
-  errorBanner: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="h-[48px] flex items-center gap-3 px-4 border-b border-[#1a1a1a] flex-shrink-0">
-        <button
-          onClick={onBack}
-          className="text-neutral-500 hover:text-neutral-300 transition-colors"
-        >
-          <ArrowLeft size={15} strokeWidth={2} />
-        </button>
-        <span className="text-sm font-semibold text-white tracking-tight">
-          New Message
-        </span>
-      </div>
-
-      {errorBanner}
-
-      {/* Search */}
-      <div className="px-4 py-3 border-b border-[#1a1a1a] flex-shrink-0">
-        <div className="relative">
-          <Search
-            size={13}
-            strokeWidth={1.5}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-600"
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name or email…"
-            autoFocus
-            className="w-full pl-8 pr-3 py-2 bg-[#161616] border border-[#272727] text-sm text-neutral-200 placeholder-neutral-700 focus:outline-none focus:border-[#3a3a3a] transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* Results */}
-      <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {isTyping || usersLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader className="animate-spin text-neutral-700" size={18} />
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-            <Search size={24} strokeWidth={1.2} className="text-neutral-700 mb-3" />
-            <p className="text-xs text-neutral-600">
-              {debouncedQuery
-                ? `No readers found for "${debouncedQuery}"`
-                : "Search for readers to message"}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-[#141414]">
-            {filteredUsers.map((user) => (
-              <button
-                key={user.id}
-                onClick={() => onCreateConversation(user.id)}
-                disabled={createPending}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#111] transition-colors disabled:opacity-50"
-              >
-                <Avatar name={user.full_name} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-neutral-300 truncate">
-                    {user.full_name || "Unknown"}
-                  </p>
-                  <p className="text-[10px] text-neutral-600 truncate mt-0.5">
-                    {user.email}
-                  </p>
-                  {user.bio && (
-                    <p className="text-[10px] text-neutral-700 truncate mt-0.5">
-                      {user.bio}
-                    </p>
-                  )}
-                </div>
-                {createPending && (
-                  <Loader className="animate-spin text-neutral-600 flex-shrink-0" size={14} />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Chat view ────────────────────────────────────────────────────────────────
-
-function ChatView({
-  currentConv,
-  currentUserId,
-  messages,
-  messagesLoading,
-  messageInput,
-  setMessageInput,
-  onSendMessage,
-  sendPending,
-  onBackMobile,
-  errorBanner,
-  messagesEndRef,
-}: {
-  currentConv?: Conversation;
-  currentUserId: string;
-  messages: Message[];
-  messagesLoading: boolean;
-  messageInput: string;
-  setMessageInput: (v: string) => void;
-  onSendMessage: () => void;
-  sendPending: boolean;
-  onBackMobile?: () => void;
-  errorBanner: React.ReactNode;
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      onSendMessage();
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(form);
+      setSuccess(true);
+      setTimeout(onClose, 800);
+    } catch {
+      setError("Failed to save changes");
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Group messages by date
-  const grouped = useMemo(() => {
-    const groups: { date: string; messages: Message[] }[] = [];
-    messages.forEach((msg) => {
-      const date = new Date(msg.created_at).toLocaleDateString(undefined, {
-        weekday: "long",
-        month: "short",
-        day: "numeric",
-      });
-      const last = groups[groups.length - 1];
-      if (last && last.date === date) {
-        last.messages.push(msg);
-      } else {
-        groups.push({ date, messages: [msg] });
-      }
-    });
-    return groups;
-  }, [messages]);
-
-  if (!currentConv) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <MessageCircle
-          size={28}
-          strokeWidth={1.2}
-          className="text-neutral-700 mb-3"
-        />
-        <p className="text-sm text-neutral-500 mb-1">Select a conversation</p>
-        <p className="text-xs text-neutral-700">
-          Choose from the list or start a new one
-        </p>
-      </div>
-    );
-  }
+  const inputCls =
+    "w-full px-3 py-2.5 bg-[#161616] border border-[#272727] text-sm text-neutral-200 placeholder-neutral-700 focus:outline-none focus:border-[#3a3a3a] transition-colors";
+  const labelCls =
+    "block text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-500 mb-1.5";
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Chat header */}
-      <div className="h-[48px] flex items-center gap-3 px-4 border-b border-[#1a1a1a] flex-shrink-0">
-        {onBackMobile && (
+    <>
+      <div
+        className="fixed inset-0 bg-black/60 z-40"
+        onClick={onClose}
+      />
+      <div className="fixed right-0 top-0 h-full w-full max-w-sm bg-[#0f0f0f] border-l border-[#1a1a1a] z-50 flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1a1a1a] flex-shrink-0">
+          <span className="text-sm font-semibold text-white tracking-tight">
+            Edit Profile
+          </span>
           <button
-            onClick={onBackMobile}
-            className="lg:hidden text-neutral-500 hover:text-neutral-300 transition-colors mr-1"
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-neutral-300 hover:bg-[#1a1a1a] transition-colors"
           >
-            <ArrowLeft size={15} strokeWidth={2} />
+            <X size={14} strokeWidth={2} />
           </button>
-        )}
-        <Avatar name={currentConv.participant?.full_name} size="sm" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-white truncate">
-            {currentConv.participant?.full_name || "Unknown"}
-          </p>
-          <p className="text-[10px] text-neutral-600 truncate">
-            {currentConv.participant?.email}
-          </p>
         </div>
-      </div>
 
-      {errorBanner}
+        {/* Form */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+          {error && (
+            <div className="bg-red-500/8 border border-red-500/15 px-3 py-2.5 text-xs text-red-400">
+              {error}
+            </div>
+          )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 [scrollbar-width:thin] [scrollbar-color:#1f1f1f_transparent]">
-        {messagesLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader className="animate-spin text-neutral-700" size={20} />
+          <div>
+            <label className={labelCls}>Full Name</label>
+            <input
+              type="text"
+              value={form.full_name}
+              onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))}
+              maxLength={100}
+              className={inputCls}
+              placeholder="Your name"
+            />
           </div>
-        ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center py-12">
-            <p className="text-xs text-neutral-600">
-              No messages yet. Say hello!
+
+          <div>
+            <label className={labelCls}>Bio</label>
+            <textarea
+              value={form.bio}
+              onChange={(e) => setForm((p) => ({ ...p, bio: e.target.value }))}
+              rows={4}
+              maxLength={300}
+              className={`${inputCls} resize-none`}
+              placeholder="Tell the community about yourself…"
+            />
+            <p className="text-[10px] text-neutral-700 mt-1 text-right">
+              {form.bio.length}/300
             </p>
           </div>
-        ) : (
-          grouped.map((group) => (
-            <div key={group.date}>
-              {/* Date separator */}
-              <div className="flex items-center gap-3 my-4">
-                <div className="flex-1 h-px bg-[#1a1a1a]" />
-                <span className="text-[10px] text-neutral-700 flex-shrink-0">
-                  {group.date}
-                </span>
-                <div className="flex-1 h-px bg-[#1a1a1a]" />
-              </div>
 
-              {/* Messages in group */}
-              <div className="space-y-1">
-                {group.messages.map((msg, idx) => {
-                  const isOwn = msg.sender_id === currentUserId;
-                  const prevMsg = group.messages[idx - 1];
-                  const showAvatar =
-                    !isOwn &&
-                    (!prevMsg || prevMsg.sender_id !== msg.sender_id);
+          <div>
+            <label className={labelCls}>Location</label>
+            <input
+              type="text"
+              value={form.location}
+              onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
+              maxLength={100}
+              className={inputCls}
+              placeholder="City, Country"
+            />
+          </div>
 
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex items-end gap-2 ${
-                        isOwn ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      {/* Avatar placeholder to keep alignment */}
-                      {!isOwn && (
-                        <div className="w-6 flex-shrink-0">
-                          {showAvatar && (
-                            <Avatar
-                              name={currentConv.participant?.full_name}
-                              size="sm"
-                            />
-                          )}
-                        </div>
-                      )}
+          <div>
+            <label className={labelCls}>Website</label>
+            <input
+              type="text"
+              value={form.website}
+              onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))}
+              maxLength={200}
+              className={inputCls}
+              placeholder="https://yoursite.com"
+            />
+          </div>
+        </div>
 
-                      <div
-                        className={`max-w-[72%] flex flex-col ${
-                          isOwn ? "items-end" : "items-start"
-                        }`}
-                      >
-                        <div
-                          className={`px-3 py-2 text-sm leading-relaxed break-words ${
-                            isOwn
-                              ? "bg-white text-[#0a0a0a]"
-                              : "bg-[#161616] border border-[#272727] text-neutral-200"
-                          } ${msg.isTemp ? "opacity-60" : ""}`}
-                        >
-                          {msg.content}
-                        </div>
-                        <div className="flex items-center gap-1 mt-1 px-0.5">
-                          <span className="text-[10px] text-neutral-700">
-                            {formatTime(msg.created_at)}
-                          </span>
-                          {isOwn && !msg.isTemp && (
-                            <CheckCheck
-                              size={11}
-                              strokeWidth={1.5}
-                              className="text-neutral-700"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input bar */}
-      <div className="flex-shrink-0 border-t border-[#1a1a1a] px-4 py-3">
-        <div className="flex items-end gap-3">
-          <textarea
-            value={messageInput}
-            onChange={(e) => setMessageInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Write a message…"
-            rows={1}
-            className="flex-1 bg-[#161616] border border-[#272727] text-sm text-neutral-200 placeholder-neutral-700 px-3 py-2.5 focus:outline-none focus:border-[#3a3a3a] transition-colors resize-none max-h-32 overflow-y-auto [scrollbar-width:thin]"
-            style={{ lineHeight: "1.5" }}
-          />
+        {/* Footer */}
+        <div className="flex-shrink-0 px-5 py-4 border-t border-[#1a1a1a] flex gap-2">
           <button
-            onClick={onSendMessage}
-            disabled={!messageInput.trim() || sendPending}
-            className="w-9 h-9 flex items-center justify-center bg-white text-[#0a0a0a] hover:bg-neutral-100 transition-colors disabled:opacity-40 flex-shrink-0"
+            onClick={onClose}
+            className="flex-1 py-2.5 text-xs font-medium text-neutral-500 border border-[#272727] hover:border-[#3a3a3a] hover:text-neutral-300 transition-colors"
           >
-            {sendPending ? (
-              <Loader className="animate-spin" size={14} />
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 py-2.5 text-xs font-semibold text-[#0a0a0a] bg-white hover:bg-neutral-100 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5"
+          >
+            {saving ? (
+              <><Loader className="animate-spin" size={12} /> Saving…</>
+            ) : success ? (
+              <><CheckCircle size={12} /> Saved</>
             ) : (
-              <Send size={14} strokeWidth={2} />
+              "Save Changes"
             )}
           </button>
         </div>
-        <p className="text-[10px] text-neutral-700 mt-1.5">
-          Enter to send · Shift+Enter for new line
-        </p>
       </div>
-    </div>
+    </>
   );
 }
 
-// ─── Main app ─────────────────────────────────────────────────────────────────
+// ─── Post card — matches dashboard feed exactly ───────────────────────────────
 
-export default function MessagesPage() {
+function ProfilePostCard({ post }: { post: PostCard }) {
+  return (
+    <Link href={`/dashboard/posts/${post.id}`}>
+      <article className="bg-[#111] border border-[#1f1f1f] hover:border-[#2a2a2a] transition-colors cursor-pointer p-5 group">
+        <div className="flex items-start justify-between mb-2.5">
+          <div className="flex-1 min-w-0 pr-3">
+            <h3 className="text-sm font-semibold text-white leading-snug tracking-tight group-hover:text-neutral-200 transition-colors">
+              {post.title}
+            </h3>
+            <div className="flex items-center gap-1.5 text-[11px] text-neutral-600 mt-1">
+              <span>{getRelativeTime(post.created_at)}</span>
+              {post.read_time && (
+                <>
+                  <span>·</span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={9} strokeWidth={1.5} />
+                    {post.read_time} min
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          {post.genre && (
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 bg-[#1a1a1a] border border-[#272727] px-2 py-0.5 flex-shrink-0">
+              {post.genre}
+            </span>
+          )}
+        </div>
+
+        {post.excerpt && (
+          <p className="text-xs text-neutral-600 leading-relaxed line-clamp-2 mb-3.5">
+            {post.excerpt}
+          </p>
+        )}
+
+        <div className="flex items-center gap-4 pt-3 border-t border-[#1a1a1a] text-neutral-700">
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <Heart size={11} strokeWidth={1.5} />
+            <span>{post.likes_count ?? 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <MessageCircle size={11} strokeWidth={1.5} />
+            <span>{post.comments_count ?? 0}</span>
+          </div>
+        </div>
+      </article>
+    </Link>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export default function ProfilePage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const params = useParams();
+  const paramId = (params as any)?.id as string | undefined;
 
-  // ── Sidebar width sync ────────────────────────────────────────────────────
-  // Reads the collapsed state from localStorage (set by LeftSidebar) and
-  // recalculates the left margin whenever it changes — so the messages layout
-  // always starts exactly where the sidebar ends, whether expanded or collapsed.
+  const [resolvedProfileId, setResolvedProfileId] = useState<string | null>(
+    paramId ?? null
+  );
+  const [activeTab, setActiveTab] = useState("reviews");
+  const [loading, setLoading] = useState(true);
+  const [profileData, setProfileData] = useState<ProfileDTO | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const getSidebarWidth = () => {
-    if (typeof window === "undefined") return 288;
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviews, setReviews] = useState<PostCard[]>([]);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsHasMore, setReviewsHasMore] = useState(false);
+
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
+  const [bookmarks, setBookmarks] = useState<PostCard[]>([]);
+  const [bookmarksPage, setBookmarksPage] = useState(1);
+  const [bookmarksHasMore, setBookmarksHasMore] = useState(false);
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  const tabs = [
+    { id: "reviews", label: "Posts" },
+    { id: "lists", label: "Saved" },
+    { id: "about", label: "About" },
+  ];
+
+  // ── Resolve profile ID ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    let alive = true;
+    if (paramId) {
+      setResolvedProfileId(paramId);
+      return;
+    }
+    const resolve = async () => {
+      try {
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (!res.ok) throw new Error("Not authenticated");
+        const me = await res.json();
+        const meId =
+          me?.id ?? me?.user?.id ?? me?.user?.user?.id ?? me?.data?.id ?? null;
+        if (!me?.authenticated || !meId) throw new Error("Not authenticated");
+        if (alive) setResolvedProfileId(String(meId));
+      } catch (e: any) {
+        if (alive) {
+          setError(e?.message || "Could not resolve profile");
+          setLoading(false);
+        }
+      }
+    };
+    resolve();
+    return () => { alive = false; };
+  }, [paramId]);
+
+  // ── Fetch profile ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!resolvedProfileId) return;
+    let alive = true;
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/user/${resolvedProfileId}/profile`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to fetch profile");
+        const data: ProfileDTO = await res.json();
+        if (alive) setProfileData(data);
+      } catch (e: any) {
+        if (alive) setError(e?.message || "Failed to load profile");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    run();
+    return () => { alive = false; };
+  }, [resolvedProfileId]);
+
+  // ── Fetch posts ────────────────────────────────────────────────────────────
+
+  const fetchReviews = async (page = 1, append = false) => {
+    if (!resolvedProfileId) return;
+    setReviewsLoading(true);
     try {
-      const collapsed = localStorage.getItem("sml_sidebar_collapsed") === "true";
-      return collapsed ? 64 : 288;
+      const res = await fetch(
+        `/api/user/${resolvedProfileId}/posts?page=${page}&limit=10`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error();
+      const data: PagedPostsResponse = await res.json();
+      setReviews((prev) => (append ? [...prev, ...data.posts] : data.posts));
+      setReviewsPage(data.page);
+      setReviewsHasMore(data.has_more);
     } catch {
-      return 288;
+      /* silent */
+    } finally {
+      setReviewsLoading(false);
     }
   };
 
-  const [sidebarWidth, setSidebarWidth] = useState<number>(288);
+  const fetchBookmarks = async (page = 1, append = false) => {
+    if (!resolvedProfileId) return;
+    setBookmarksLoading(true);
+    try {
+      const res = await fetch(
+        `/api/user/${resolvedProfileId}/bookmarks?page=${page}&limit=10`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error();
+      const data: PagedPostsResponse = await res.json();
+      setBookmarks((prev) =>
+        append ? [...prev, ...data.posts] : data.posts
+      );
+      setBookmarksPage(data.page);
+      setBookmarksHasMore(data.has_more);
+    } catch {
+      /* silent */
+    } finally {
+      setBookmarksLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Set correct width on mount (after localStorage is available)
-    setSidebarWidth(getSidebarWidth());
-
-    // Listen for storage changes triggered by the sidebar toggle
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "sml_sidebar_collapsed") {
-        setSidebarWidth(e.newValue === "true" ? 64 : 288);
-      }
-    };
-
-    // Also poll every 200ms for same-tab changes (storage event only fires
-    // in OTHER tabs; same-tab changes need a custom event or polling)
-    const interval = setInterval(() => {
-      setSidebarWidth(getSidebarWidth());
-    }, 200);
-
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      clearInterval(interval);
-    };
-  }, []);
-
-  const [selectedConversation, setSelectedConversation] = useState<
-    string | null
-  >(null);
-  const [view, setView] = useState<"conversations" | "newChat" | "chat">(
-    "conversations"
-  );
-  const [messageInput, setMessageInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
-
-  // ── Auth ──────────────────────────────────────────────────────────────────
+    if (resolvedProfileId) fetchReviews(1, false);
+  }, [resolvedProfileId]);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch("/api/user", { credentials: "include" });
+    if (
+      resolvedProfileId &&
+      activeTab === "lists" &&
+      bookmarks.length === 0 &&
+      !bookmarksLoading
+    ) {
+      fetchBookmarks(1, false);
+    }
+  }, [activeTab, resolvedProfileId]);
 
-        // Non-200 that isn't specifically a 401 — API might be slow/erroring,
-        // don't redirect, just leave currentUserId as null and let queries stay disabled
-        if (!res.ok) {
-          if (res.status === 401) router.push("/auth/login");
-          return;
-        }
+  // ── Follow ─────────────────────────────────────────────────────────────────
 
-        const data = await res.json();
-
-        if (data.authenticated && (data.user?.id || data.id)) {
-          // Support both response shapes: { user: { id } } and { id }
-          setCurrentUserId(data.user?.id ?? data.id);
-        } else if (data.authenticated === false) {
-          // Explicitly told we're not authenticated
-          router.push("/auth/login");
-        }
-        // If authenticated is undefined (unexpected shape) — do nothing,
-        // avoid false redirects
-      } catch (e) {
-        // Network error — don't redirect, user may just have slow connection
-        console.error("Auth check failed:", e);
-      }
-    };
-    fetchUser();
-  }, [router]);
-
-  // ── Queries ────────────────────────────────────────────────────────────────
-
-  const {
-    data: conversationsData,
-    isLoading: conversationsLoading,
-    error: conversationsError,
-    refetch: refetchConversations,
-  } = useQuery({
-    queryKey: ["conversations"],
-    queryFn: fetchConversations,
-    refetchInterval: 15000,
-    enabled: !!currentUserId,
-  });
-
-  const { data: messagesData, isLoading: messagesLoading } = useQuery({
-    queryKey: ["messages", selectedConversation],
-    queryFn: () => fetchMessages(selectedConversation!),
-    enabled: !!selectedConversation,
-    refetchInterval: 5000,
-  });
-
-  const {
-    data: usersData,
-    isLoading: usersLoading,
-    error: usersError,
-  } = useQuery({
-    queryKey: ["allUsers"],
-    queryFn: fetchAllUsers,
-    enabled: view === "newChat",
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const conversations = conversationsData?.conversations || [];
-  const messages = messagesData?.messages || [];
-  const allUsers = usersData?.users || [];
-
-  // ── Filter users ───────────────────────────────────────────────────────────
-
-  const filteredUsers = useMemo(() => {
-    const query = debouncedSearchQuery.toLowerCase();
-    if (!query) return allUsers.slice(0, 20);
-    return allUsers
-      .filter((u) => {
-        const name = (u.full_name || "").toLowerCase();
-        const email = (u.email || "").toLowerCase();
-        const bio = (u.bio || "").toLowerCase();
-        return (
-          name.includes(query) || email.includes(query) || bio.includes(query)
-        );
-      })
-      .slice(0, 20);
-  }, [allUsers, debouncedSearchQuery]);
-
-  const isTyping =
-    searchQuery !== debouncedSearchQuery && searchQuery.length >= 2;
-
-  const currentConv = conversations.find((c) => c.id === selectedConversation);
-
-  // ── Auto-scroll ────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // ── Mutations ──────────────────────────────────────────────────────────────
-
-  const sendMessageMutation = useMutation({
-    mutationFn: sendMessage,
-    onMutate: async ({ content }) => {
-      const tempMessage: Message = {
-        id: "temp-" + Date.now(),
-        content,
-        created_at: new Date().toISOString(),
-        sender_id: currentUserId || "",
-        profiles: { full_name: "You", email: "you" },
-        isTemp: true,
-      };
-      await queryClient.cancelQueries({
-        queryKey: ["messages", selectedConversation],
+  const toggleFollow = async () => {
+    if (!profileData || !resolvedProfileId || profileData.viewer.is_me) return;
+    const was = profileData.viewer.is_following;
+    setFollowBusy(true);
+    setProfileData((prev) =>
+      prev
+        ? {
+            ...prev,
+            viewer: { ...prev.viewer, is_following: !was },
+            stats: {
+              ...prev.stats,
+              followers: Math.max(0, prev.stats.followers + (was ? -1 : 1)),
+            },
+          }
+        : prev
+    );
+    try {
+      const res = await fetch(`/api/user/${resolvedProfileId}/follow`, {
+        method: was ? "DELETE" : "POST",
+        credentials: "include",
       });
-      const previousMessages = queryClient.getQueryData<{
-        messages: Message[];
-      }>(["messages", selectedConversation]);
-      queryClient.setQueryData<{ messages: Message[] }>(
-        ["messages", selectedConversation],
-        (old) => ({ messages: [...(old?.messages || []), tempMessage] })
+      if (!res.ok) throw new Error();
+    } catch {
+      setProfileData((prev) =>
+        prev
+          ? {
+              ...prev,
+              viewer: { ...prev.viewer, is_following: was },
+              stats: {
+                ...prev.stats,
+                followers: Math.max(0, prev.stats.followers + (was ? 1 : -1)),
+              },
+            }
+          : prev
       );
-      return { previousMessages, tempMessage };
-    },
-    onSuccess: (data, _variables, context) => {
-      queryClient.setQueryData<{ messages: Message[] }>(
-        ["messages", selectedConversation],
-        (old) => ({
-          messages: [
-            ...(old?.messages.filter((m) => m.id !== context?.tempMessage.id) ||
-              []),
-            data.message,
-          ],
-        })
-      );
-      refetchConversations();
-    },
-    onError: (_err, _variables, context) => {
-      if (context?.previousMessages) {
-        queryClient.setQueryData(
-          ["messages", selectedConversation],
-          context.previousMessages
-        );
-      }
-      setError("Failed to send message");
-    },
-  });
+    } finally {
+      setFollowBusy(false);
+    }
+  };
 
-  const createConversationMutation = useMutation({
-    mutationFn: createConversation,
-    onSuccess: async (data) => {
-      setSelectedConversation(data.conversationId);
-      await refetchConversations();
-      setView("chat");
-      setSearchQuery("");
-      setError(null);
-    },
-    onError: () => setError("Failed to create conversation"),
-  });
+  // ── Save profile ───────────────────────────────────────────────────────────
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
-
-  const handleSendMessage = () => {
-    if (!messageInput.trim() || !selectedConversation) return;
-    sendMessageMutation.mutate({
-      conversationId: selectedConversation,
-      content: messageInput.trim(),
+  const handleSaveProfile = async (
+    updates: Partial<ProfileDTO["profile"]>
+  ) => {
+    if (!resolvedProfileId) return;
+    const res = await fetch(`/api/user/${resolvedProfileId}/profile`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(updates),
     });
-    setMessageInput("");
+    if (!res.ok) throw new Error("Failed to update profile");
+    const data = await res.json();
+    setProfileData((prev) =>
+      prev ? { ...prev, profile: { ...prev.profile, ...data.profile } } : prev
+    );
   };
 
   const handleSignOut = async () => {
@@ -876,18 +535,9 @@ export default function MessagesPage() {
     }
   };
 
-  const errorBannerNode = (
-    <ErrorBanner
-      error={error}
-      conversationsError={conversationsError}
-      usersError={usersError}
-      onClose={() => setError(null)}
-    />
-  );
+  // ─── States ────────────────────────────────────────────────────────────────
 
-  // ── Loading state ──────────────────────────────────────────────────────────
-
-  if (!currentUserId) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <Loader className="animate-spin text-neutral-700" size={22} />
@@ -895,130 +545,346 @@ export default function MessagesPage() {
     );
   }
 
+  if (error || !profileData) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-neutral-200 flex flex-col items-center justify-center gap-4">
+        <p className="text-sm text-neutral-500">{error || "Profile not found"}</p>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="text-xs font-medium text-neutral-400 border border-[#272727] px-4 py-2 hover:border-[#3a3a3a] hover:text-neutral-200 transition-colors"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  const { profile, stats, viewer } = profileData;
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen bg-[#0a0a0a] text-neutral-200 overflow-hidden">
+    <div className="min-h-screen bg-[#0a0a0a] text-neutral-200">
       <LeftSidebar onSignOut={handleSignOut} />
 
-      {/* ── Mobile layout ── */}
-      <div className="lg:hidden flex flex-col h-screen pt-14 overflow-hidden">
-        {view === "conversations" && (
-          <ConversationsList
-            conversations={conversations}
-            loading={conversationsLoading}
-            selected={selectedConversation}
-            onSelect={(id) => {
-              setSelectedConversation(id);
-              setView("chat");
-              setError(null);
-            }}
-            onNewChat={() => {
-              setView("newChat");
-              setError(null);
-            }}
-            errorBanner={errorBannerNode}
-          />
-        )}
-        {view === "newChat" && (
-          <NewChatView
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            debouncedQuery={debouncedSearchQuery}
-            isTyping={isTyping}
-            usersLoading={usersLoading}
-            filteredUsers={filteredUsers}
-            onBack={() => {
-              setView("conversations");
-              setSearchQuery("");
-              setError(null);
-            }}
-            onCreateConversation={(id) =>
-              createConversationMutation.mutate(id)
-            }
-            createPending={createConversationMutation.isPending}
-            errorBanner={errorBannerNode}
-          />
-        )}
-        {view === "chat" && (
-          <ChatView
-            currentConv={currentConv}
-            currentUserId={currentUserId}
-            messages={messages}
-            messagesLoading={messagesLoading}
-            messageInput={messageInput}
-            setMessageInput={setMessageInput}
-            onSendMessage={handleSendMessage}
-            sendPending={sendMessageMutation.isPending}
-            onBackMobile={() => {
-              setView("conversations");
-              setSelectedConversation(null);
-              setError(null);
-            }}
-            errorBanner={errorBannerNode}
-            messagesEndRef={messagesEndRef}
-          />
-        )}
-      </div>
+      <main className="lg:ml-[288px] min-h-screen pt-14 lg:pt-0">
+        <div className="max-w-4xl mx-auto px-5 py-8">
 
-      {/* ── Desktop layout ── */}
-      <div style={{ marginLeft: `${sidebarWidth}px`, transition: "margin-left 0.3s cubic-bezier(0.4,0,0.2,1)" }} className="hidden lg:flex h-screen overflow-hidden">
-        {/* Conversation / new-chat panel */}
-        <div className="w-72 flex-shrink-0 border-r border-[#1a1a1a] flex flex-col overflow-hidden">
-          {view === "newChat" ? (
-            <NewChatView
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              debouncedQuery={debouncedSearchQuery}
-              isTyping={isTyping}
-              usersLoading={usersLoading}
-              filteredUsers={filteredUsers}
-              onBack={() => {
-                setView("conversations");
-                setSearchQuery("");
-                setError(null);
-              }}
-              onCreateConversation={(id) =>
-                createConversationMutation.mutate(id)
-              }
-              createPending={createConversationMutation.isPending}
-              errorBanner={errorBannerNode}
-            />
-          ) : (
-            <ConversationsList
-              conversations={conversations}
-              loading={conversationsLoading}
-              selected={selectedConversation}
-              onSelect={(id) => {
-                setSelectedConversation(id);
-                setView("chat");
-                setError(null);
-              }}
-              onNewChat={() => {
-                setView("newChat");
-                setError(null);
-              }}
-              errorBanner={errorBannerNode}
-            />
+          {/* ── Profile header ── */}
+          <div className="border-b border-[#1a1a1a] pb-7 mb-6">
+            <div className="flex items-start gap-5 mb-5">
+
+              {/* Avatar */}
+              <div className="relative flex-shrink-0">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#1e1e1e] border border-[#2a2a2a] rounded-full flex items-center justify-center text-neutral-400 text-xl font-semibold overflow-hidden">
+                  {profile.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt={profile.full_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{getInitials(profile.full_name)}</span>
+                  )}
+                </div>
+                {viewer.is_me && (
+                  <button
+                    onClick={() => setShowEdit(true)}
+                    title="Edit profile"
+                    className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-[#161616] border border-[#2a2a2a] rounded-full flex items-center justify-center text-neutral-500 hover:text-neutral-300 transition-colors"
+                  >
+                    <Edit3 size={10} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+
+              {/* Name + actions */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <h1 className="text-lg font-semibold text-white tracking-tight leading-tight">
+                      {profile.full_name}
+                    </h1>
+                    <p className="text-xs text-neutral-600 mt-0.5">
+                      @{profile.id.slice(0, 8)}
+                    </p>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {viewer.is_me ? (
+                      <button
+                        onClick={() => setShowEdit(true)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-neutral-400 border border-[#272727] px-3 py-1.5 hover:border-[#3a3a3a] hover:text-neutral-200 transition-colors"
+                      >
+                        <Settings size={12} strokeWidth={1.5} />
+                        Edit Profile
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={toggleFollow}
+                          disabled={followBusy}
+                          className={`text-xs font-semibold px-4 py-1.5 border transition-all disabled:opacity-50 ${
+                            viewer.is_following
+                              ? "border-[#1f1f1f] text-neutral-600 hover:border-red-900/40 hover:text-red-400"
+                              : "bg-white text-[#0a0a0a] border-white hover:bg-neutral-100"
+                          }`}
+                        >
+                          {followBusy
+                            ? "…"
+                            : viewer.is_following
+                            ? "Following"
+                            : "Follow"}
+                        </button>
+                        <button
+                          onClick={() =>
+                            router.push("/dashboard/messages")
+                          }
+                          title="Send message"
+                          className="w-8 h-8 flex items-center justify-center text-neutral-500 border border-[#272727] hover:border-[#3a3a3a] hover:text-neutral-300 transition-colors"
+                        >
+                          <MessageCircle size={13} strokeWidth={1.5} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bio */}
+                {profile.bio && (
+                  <p className="text-sm text-neutral-400 leading-relaxed mt-3 max-w-xl">
+                    {profile.bio}
+                  </p>
+                )}
+
+                {/* Meta info */}
+                <div className="flex flex-wrap items-center gap-3 mt-3">
+                  {profile.location && (
+                    <span className="flex items-center gap-1 text-[11px] text-neutral-600">
+                      <MapPin size={10} strokeWidth={1.5} />
+                      {profile.location}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1 text-[11px] text-neutral-600">
+                    <Calendar size={10} strokeWidth={1.5} />
+                    Joined {joinLabel(profile.created_at)}
+                  </span>
+                  {profile.website && (
+                    <a
+                      href={
+                        profile.website.startsWith("http")
+                          ? profile.website
+                          : `https://${profile.website}`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-300 transition-colors"
+                    >
+                      <ExternalLink size={10} strokeWidth={1.5} />
+                      {profile.website.replace(/^https?:\/\//, "")}
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Stats row ── */}
+            <div className="flex items-center gap-6 sm:gap-8">
+              {[
+                { value: stats.reviews, label: "Posts" },
+                { value: stats.followers, label: "Followers" },
+                { value: stats.following, label: "Following" },
+                { value: stats.readingLists, label: "Saved" },
+              ].map((s) => (
+                <div key={s.label} className="text-center sm:text-left">
+                  <span className="text-base font-semibold text-white tabular-nums">
+                    {formatCount(s.value)}
+                  </span>
+                  <span className="text-[11px] text-neutral-600 ml-1.5">
+                    {s.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Tabs ── */}
+          <div className="flex border-b border-[#1a1a1a] mb-6">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`text-[11px] font-medium px-3.5 py-2.5 border-b-2 transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "border-white text-white"
+                    : "border-transparent text-neutral-600 hover:text-neutral-300"
+                }`}
+              >
+                {tab.label}
+                {tab.id === "reviews" && (
+                  <span className="ml-1.5 text-[10px] text-neutral-700">
+                    {stats.reviews}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Tab content ── */}
+
+          {/* Posts */}
+          {activeTab === "reviews" && (
+            <div className="space-y-3">
+              {reviewsLoading && reviews.length === 0 ? (
+                [...Array(3)].map((_, i) => <PostSkeleton key={i} />)
+              ) : reviews.length === 0 ? (
+                <div className="bg-[#111] border border-[#1f1f1f] p-14 text-center">
+                  <p className="text-sm text-neutral-500 mb-1">No posts yet</p>
+                  {viewer.is_me && (
+                    <button
+                      onClick={() => router.push("/dashboard/posts")}
+                      className="text-xs font-semibold text-[#0a0a0a] bg-white px-4 py-2 hover:bg-neutral-100 transition-colors mt-4"
+                    >
+                      Write your first post
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {reviews.map((p) => (
+                    <ProfilePostCard key={p.id} post={p} />
+                  ))}
+                  {reviewsHasMore && (
+                    <button
+                      onClick={() => fetchReviews(reviewsPage + 1, true)}
+                      disabled={reviewsLoading}
+                      className="w-full py-3 text-xs font-medium text-neutral-500 border border-[#272727] hover:border-[#3a3a3a] hover:text-neutral-300 transition-colors disabled:opacity-40"
+                    >
+                      {reviewsLoading ? "Loading…" : "Load more"}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Saved */}
+          {activeTab === "lists" && (
+            <div className="space-y-3">
+              {bookmarksLoading && bookmarks.length === 0 ? (
+                [...Array(3)].map((_, i) => <PostSkeleton key={i} />)
+              ) : bookmarks.length === 0 ? (
+                <div className="bg-[#111] border border-[#1f1f1f] p-14 text-center">
+                  <Bookmark
+                    size={28}
+                    strokeWidth={1.2}
+                    className="mx-auto mb-3 text-neutral-700"
+                  />
+                  <p className="text-sm text-neutral-500">No saved posts yet</p>
+                </div>
+              ) : (
+                <>
+                  {bookmarks.map((p) => (
+                    <ProfilePostCard key={p.id} post={p} />
+                  ))}
+                  {bookmarksHasMore && (
+                    <button
+                      onClick={() => fetchBookmarks(bookmarksPage + 1, true)}
+                      disabled={bookmarksLoading}
+                      className="w-full py-3 text-xs font-medium text-neutral-500 border border-[#272727] hover:border-[#3a3a3a] hover:text-neutral-300 transition-colors disabled:opacity-40"
+                    >
+                      {bookmarksLoading ? "Loading…" : "Load more"}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* About */}
+          {activeTab === "about" && (
+            <div className="space-y-3 max-w-xl">
+              {/* Bio */}
+              <div className="bg-[#111] border border-[#1f1f1f] p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-600 mb-3">
+                  Bio
+                </p>
+                <p className="text-sm text-neutral-400 leading-relaxed">
+                  {profile.bio || "No bio yet."}
+                </p>
+              </div>
+
+              {/* Details */}
+              <div className="bg-[#111] border border-[#1f1f1f] p-5 space-y-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-600 mb-3">
+                  Details
+                </p>
+                {profile.location && (
+                  <div className="flex items-center gap-2.5 text-sm text-neutral-400">
+                    <MapPin size={13} strokeWidth={1.5} className="text-neutral-600 flex-shrink-0" />
+                    {profile.location}
+                  </div>
+                )}
+                <div className="flex items-center gap-2.5 text-sm text-neutral-400">
+                  <Calendar size={13} strokeWidth={1.5} className="text-neutral-600 flex-shrink-0" />
+                  Joined {joinLabel(profile.created_at)}
+                </div>
+                {profile.website && (
+                  <div className="flex items-center gap-2.5">
+                    <ExternalLink size={13} strokeWidth={1.5} className="text-neutral-600 flex-shrink-0" />
+                    <a
+                      href={
+                        profile.website.startsWith("http")
+                          ? profile.website
+                          : `https://${profile.website}`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-neutral-400 hover:text-neutral-200 transition-colors"
+                    >
+                      {profile.website.replace(/^https?:\/\//, "")}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Stats */}
+              <div className="bg-[#111] border border-[#1f1f1f] p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-600 mb-4">
+                  Stats
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { label: "Posts written", value: stats.reviews },
+                    { label: "Followers", value: stats.followers },
+                    { label: "Following", value: stats.following },
+                    { label: "Posts saved", value: stats.readingLists },
+                  ].map((s) => (
+                    <div key={s.label}>
+                      <p className="text-xl font-semibold text-white tabular-nums">
+                        {formatCount(s.value)}
+                      </p>
+                      <p className="text-[10px] text-neutral-600 mt-0.5">
+                        {s.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
         </div>
+      </main>
 
-        {/* Chat panel */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <ChatView
-            currentConv={currentConv}
-            currentUserId={currentUserId}
-            messages={messages}
-            messagesLoading={messagesLoading}
-            messageInput={messageInput}
-            setMessageInput={setMessageInput}
-            onSendMessage={handleSendMessage}
-            sendPending={sendMessageMutation.isPending}
-            errorBanner={errorBannerNode}
-            messagesEndRef={messagesEndRef}
-          />
-        </div>
-      </div>
+      {/* Edit panel */}
+      {showEdit && (
+        <EditPanel
+          profile={profile}
+          onSave={handleSaveProfile}
+          onClose={() => setShowEdit(false)}
+        />
+      )}
     </div>
   );
 }
